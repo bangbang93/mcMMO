@@ -57,7 +57,12 @@ public final class Woodcutting {
             return ModUtils.getCustomBlock(blockState).getXpGain();
         }
 
-        TreeSpecies species = ((Tree) blockState.getData()).getSpecies();
+        //TODO Remove this workaround when casting to Tree works again
+        TreeSpecies species = TreeSpecies.GENERIC;
+        if (blockState.getData() instanceof Tree) {
+            species = ((Tree) blockState.getData()).getSpecies();
+        }
+
         int xp = ExperienceConfig.getInstance().getWoodcuttingTreeXP(species);
 
         if (species == TreeSpecies.JUNGLE && experienceGainMethod == ExperienceGainMethod.TREE_FELLER) {
@@ -76,8 +81,16 @@ public final class Woodcutting {
         if (ModUtils.isCustomLogBlock(blockState) && ModUtils.getCustomBlock(blockState).isDoubleDropEnabled()) {
             Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
         }
-        else if (Config.getInstance().getWoodcuttingDoubleDropsEnabled(((Tree) blockState.getData()).getSpecies())) {
-            Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
+        else {
+            //TODO Remove this workaround when casting to Tree works again
+            TreeSpecies species = TreeSpecies.GENERIC;
+            if (blockState.getData() instanceof Tree) {
+                species = ((Tree) blockState.getData()).getSpecies();
+            }
+
+            if (Config.getInstance().getWoodcuttingDoubleDropsEnabled(species)) {
+                Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
+            }
         }
     }
 
