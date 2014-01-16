@@ -210,8 +210,7 @@ public final class SQLDatabaseManager implements DatabaseManager {
                     for (int i = 1; i <= resultSet.getMetaData().getColumnCount(); i++) {
                         column.add(resultSet.getString(i));
                     }
-
-                    stats.add(new PlayerStat(column.get(1), Integer.valueOf(column.get(0))));
+                    stats.add(new PlayerStat(column.get(1), Long.valueOf(column.get(0)).intValue()));
                 }
             }
             catch (SQLException ex) {

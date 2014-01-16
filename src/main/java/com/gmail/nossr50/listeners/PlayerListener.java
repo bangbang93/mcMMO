@@ -298,6 +298,10 @@ public class PlayerListener implements Listener {
         }
 
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+        if (mcMMOPlayer == null){
+        	plugin.getLogger().severe(player.toString());
+        	return;
+        }
 
         Item drop = event.getItem();
         ItemStack dropStack = drop.getItemStack();
@@ -309,7 +313,8 @@ public class PlayerListener implements Listener {
 
             return;
         }
-
+        
+        try {
         if (!drop.hasMetadata(mcMMO.droppedItemKey) && mcMMOPlayer.inParty() && ItemUtils.isSharable(dropStack)) {
             event.setCancelled(ShareHandler.handleItemShare(drop, mcMMOPlayer));
 
@@ -317,6 +322,12 @@ public class PlayerListener implements Listener {
                 player.playSound(player.getLocation(), Sound.ITEM_PICKUP, Misc.POP_VOLUME, Misc.getPopPitch());
                 return;
             }
+        }
+        } catch (Exception ex){
+        	plugin.getLogger().severe("OK HERE");
+        	plugin.getLogger().severe(drop.toString());
+        	plugin.getLogger().severe(mcMMOPlayer.toString());
+        	plugin.getLogger().severe(dropStack.toString());
         }
 
         if ((mcMMOPlayer.isUsingUnarmed() && ItemUtils.isSharable(dropStack)) || mcMMOPlayer.getAbilityMode(AbilityType.BERSERK)) {
