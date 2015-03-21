@@ -1,9 +1,9 @@
 package com.gmail.nossr50.commands.party;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -12,10 +12,10 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.util.StringUtil;
 
-import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.commands.chat.PartyChatCommand;
 import com.gmail.nossr50.commands.party.alliance.PartyAllianceCommand;
 import com.gmail.nossr50.commands.party.teleport.PtpCommand;
+import com.gmail.nossr50.datatypes.party.Party;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.util.Permissions;
@@ -55,7 +55,7 @@ public class PartyCommand implements TabExecutor {
     private CommandExecutor partyRenameCommand         = new PartyRenameCommand();
     private CommandExecutor partyInfoCommand           = new PartyInfoCommand();
     private CommandExecutor partyHelpCommand           = new PartyHelpCommand();
-    private CommandExecutor partyTeleportCommand       = mcMMO.p.getCommand("ptp").getExecutor();
+    private CommandExecutor partyTeleportCommand       = new PtpCommand();
     private CommandExecutor partyChatCommand           = new PartyChatCommand();
     private CommandExecutor partyAllianceCommand       = new PartyAllianceCommand();
 
@@ -71,6 +71,11 @@ public class PartyCommand implements TabExecutor {
         }
 
         Player player = (Player) sender;
+
+        if (!UserManager.hasPlayerDataKey(player)) {
+            return true;
+        }
+
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
 
         if (args.length < 1) {
@@ -129,7 +134,7 @@ public class PartyCommand implements TabExecutor {
         }
 
         // Party leader commands
-        if (!mcMMOPlayer.getParty().getLeader().equalsIgnoreCase(player.getName())) {
+        if (!mcMMOPlayer.getParty().getLeader().getUniqueId().equals(player.getUniqueId())) {
             sender.sendMessage(LocaleLoader.getString("Party.NotOwner"));
             return true;
         }
@@ -178,7 +183,7 @@ public class PartyCommand implements TabExecutor {
                     case INVITE:
                     case KICK:
                     case OWNER:
-                        Set<String> playerNames = UserManager.getPlayerNames();
+                        List<String> playerNames = CommandUtils.getOnlinePlayerNames(sender);
                         return StringUtil.copyPartialMatches(args[1], playerNames, new ArrayList<String>(playerNames.size()));
                     case XPSHARE:
                         return StringUtil.copyPartialMatches(args[1], XPSHARE_COMPLETIONS, new ArrayList<String>(XPSHARE_COMPLETIONS.size()));
@@ -193,7 +198,10 @@ public class PartyCommand implements TabExecutor {
                         List<String> matches = StringUtil.copyPartialMatches(args[1], PtpCommand.TELEPORT_SUBCOMMANDS, new ArrayList<String>(PtpCommand.TELEPORT_SUBCOMMANDS.size()));
 
                         if (matches.size() == 0) {
-                            playerNames = UserManager.getPlayerNames();
+                            Player player = (Player) sender;
+                            Party party = UserManager.getPlayer(player).getParty();
+
+                            playerNames = party.getOnlinePlayerNames(player);
                             return StringUtil.copyPartialMatches(args[1], playerNames, new ArrayList<String>(playerNames.size()));
                         }
 
@@ -220,13 +228,7 @@ public class PartyCommand implements TabExecutor {
     }
 
     private String[] extractArgs(String[] args) {
-        String[] newArgs = new String[args.length - 1];
-
-        for (int i = 1; i < args.length; i++) {
-            newArgs[i - 1] = args[i];
-        }
-
-        return newArgs;
+        return Arrays.copyOfRange(args, 1, args.length);
     }
 
     private boolean isItemShareCategory(String category) {

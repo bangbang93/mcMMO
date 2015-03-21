@@ -2,7 +2,6 @@ package com.gmail.nossr50.database;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -10,10 +9,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.bukkit.OfflinePlayer;
 
@@ -22,10 +23,15 @@ import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.MobHealthbarType;
 import com.gmail.nossr50.datatypes.database.DatabaseType;
 import com.gmail.nossr50.datatypes.database.PlayerStat;
+import com.gmail.nossr50.datatypes.database.UpgradeType;
 import com.gmail.nossr50.datatypes.player.PlayerProfile;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.runnables.database.UUIDUpdateAsyncTask;
 import com.gmail.nossr50.util.Misc;
+import com.gmail.nossr50.util.StringUtils;
+
+import org.apache.commons.lang.ArrayUtils;
 
 public final class FlatfileDatabaseManager implements DatabaseManager {
     private final HashMap<SkillType, List<PlayerStat>> playerStatHash = new HashMap<SkillType, List<PlayerStat>>();
@@ -40,6 +46,10 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
         usersFile = new File(mcMMO.getUsersFilePath());
         checkStructure();
         updateLeaderboards();
+
+        if (mcMMO.getUpgradeManager().shouldUpgrade(UpgradeType.ADD_UUIDS)) {
+            new UUIDUpdateAsyncTask(mcMMO.p, getStoredUsers()).runTaskAsynchronously(mcMMO.p);
+        }
     }
 
     public void purgePowerlessUsers() {
@@ -56,7 +66,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
             try {
                 in = new BufferedReader(new FileReader(usersFilePath));
                 StringBuilder writer = new StringBuilder();
-                String line = "";
+                String line;
 
                 while ((line = in.readLine()) != null) {
                     String[] character = line.split(":");
@@ -76,7 +86,6 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                     }
                     else {
                         purgedUsers++;
-                        Misc.profileCleanup(character[0]);
                     }
                 }
 
@@ -88,8 +97,22 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
             }
             finally {
-                tryClose(in);
-                tryClose(out);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
 
@@ -111,7 +134,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
             try {
                 in = new BufferedReader(new FileReader(usersFilePath));
                 StringBuilder writer = new StringBuilder();
-                String line = "";
+                String line;
 
                 while ((line = in.readLine()) != null) {
                     String[] character = line.split(":");
@@ -131,7 +154,6 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
 
                     if (currentTime - lastPlayed > PURGE_TIME) {
                         removedPlayers++;
-                        Misc.profileCleanup(name);
                     }
                     else {
                         if (rewrite) {
@@ -154,8 +176,22 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
             }
             finally {
-                tryClose(in);
-                tryClose(out);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
 
@@ -173,7 +209,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
             try {
                 in = new BufferedReader(new FileReader(usersFilePath));
                 StringBuilder writer = new StringBuilder();
-                String line = "";
+                String line;
 
                 while ((line = in.readLine()) != null) {
                     // Write out the same file but when we get to the player we want to remove, we skip his line.
@@ -193,8 +229,22 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
             }
             finally {
-                tryClose(in);
-                tryClose(out);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
 
@@ -205,6 +255,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
 
     public boolean saveUser(PlayerProfile profile) {
         String playerName = profile.getPlayerName();
+        UUID uuid = profile.getUniqueId();
 
         BufferedReader in = null;
         FileWriter out = null;
@@ -219,8 +270,9 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
 
                 // While not at the end of the file
                 while ((line = in.readLine()) != null) {
-                    // Read the line in and copy it to the output it's not the player we want to edit
-                    if (!line.split(":")[0].equalsIgnoreCase(playerName)) {
+                    // Read the line in and copy it to the output if it's not the player we want to edit
+                    String[] character = line.split(":");
+                    if (!(uuid != null && character[41].equalsIgnoreCase(uuid.toString())) && !character[0].equalsIgnoreCase(playerName)) {
                         writer.append(line).append("\r\n");
                     }
                     else {
@@ -267,6 +319,8 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                         writer.append(mobHealthbarType == null ? Config.getInstance().getMobHealthbarDefault().toString() : mobHealthbarType.toString()).append(":");
                         writer.append(profile.getSkillLevel(SkillType.ALCHEMY)).append(":");
                         writer.append(profile.getSkillXpLevel(SkillType.ALCHEMY)).append(":");
+                        writer.append(uuid != null ? uuid.toString() : "NULL").append(":");
+                        writer.append(profile.getScoreboardTipsShown()).append(":");
                         writer.append("\r\n");
                     }
                 }
@@ -281,8 +335,22 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 return false;
             }
             finally {
-                tryClose(in);
-                tryClose(out);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
     }
@@ -309,7 +377,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
         return skills;
     }
 
-    public void newUser(String playerName) {
+    public void newUser(String playerName, UUID uuid) {
         BufferedWriter out = null;
         synchronized (fileWritingLock) {
             try {
@@ -358,7 +426,8 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 out.append(Config.getInstance().getMobHealthbarDefault().toString()).append(":"); // Mob Healthbar HUD
                 out.append("0:"); // Alchemy
                 out.append("0:"); // AlchemyXp
-                
+                out.append(uuid != null ? uuid.toString() : "NULL").append(":"); // UUID
+                out.append("0:"); // Scoreboard tips shown
                 // Add more in the same format as the line above
 
                 out.newLine();
@@ -367,12 +436,28 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 e.printStackTrace();
             }
             finally {
-                tryClose(out);
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
     }
 
+    @Deprecated
     public PlayerProfile loadPlayerProfile(String playerName, boolean create) {
+        return loadPlayerProfile(playerName, null, false);
+    }
+
+    public PlayerProfile loadPlayerProfile(UUID uuid) {
+        return loadPlayerProfile("", uuid, false);
+    }
+
+    public PlayerProfile loadPlayerProfile(String playerName, UUID uuid, boolean create) {
         BufferedReader in = null;
         String usersFilePath = mcMMO.getUsersFilePath();
 
@@ -386,18 +471,36 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                     // Find if the line contains the player we want.
                     String[] character = line.split(":");
 
-                    if (!character[0].equalsIgnoreCase(playerName)) {
+                    // Compare names because we don't have a valid uuid for that player even
+                    // if input uuid is not null
+                    if (character[41].equalsIgnoreCase("NULL")) {
+                        if (!character[0].equalsIgnoreCase(playerName)) {
+                            continue;
+                        }
+                    }
+                    // If input uuid is not null then we should compare uuids
+                    else if ((uuid != null && !character[41].equalsIgnoreCase(uuid.toString())) || (uuid == null && !character[0].equalsIgnoreCase(playerName))) {
                         continue;
                     }
 
-                    PlayerProfile p = loadFromLine(character);
-                    return p;
+                    // Update playerName in database after name change
+                    if (!character[0].equalsIgnoreCase(playerName)) {
+                        mcMMO.p.debug("Name change detected: " + character[0] + " => " + playerName);
+                        character[0] = playerName;
+                    }
+
+                    return loadFromLine(character);
                 }
 
                 // Didn't find the player, create a new one
                 if (create) {
-                    newUser(playerName);
-                    return new PlayerProfile(playerName, true);
+                    if (uuid == null) {
+                        newUser(playerName, uuid);
+                        return new PlayerProfile(playerName, true);
+                    }
+
+                    newUser(playerName, uuid);
+                    return new PlayerProfile(playerName, uuid, true);
                 }
             }
             catch (Exception e) {
@@ -411,14 +514,18 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                         in.close();
                     }
                     catch (IOException e) {
-                        e.printStackTrace();
+                        // Ignore
                     }
                 }
             }
         }
 
         // Return unloaded profile
-        return new PlayerProfile(playerName);
+        if (uuid == null) {
+            return new PlayerProfile(playerName);
+        }
+
+        return new PlayerProfile(playerName, uuid);
     }
 
     public void convertUsers(DatabaseManager destination) {
@@ -450,9 +557,136 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 e.printStackTrace();
             }
             finally {
-                tryClose(in);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
+    }
+
+    public boolean saveUserUUID(String userName, UUID uuid) {
+        boolean worked = false;
+
+        int i = 0;
+        BufferedReader in = null;
+        FileWriter out = null;
+        String usersFilePath = mcMMO.getUsersFilePath();
+
+        synchronized (fileWritingLock) {
+            try {
+                in = new BufferedReader(new FileReader(usersFilePath));
+                StringBuilder writer = new StringBuilder();
+                String line;
+
+                while ((line = in.readLine()) != null) {
+                    String[] character = line.split(":");
+                    if (!worked && character[0].equalsIgnoreCase(userName)) {
+                        if (character.length < 42) {
+                            mcMMO.p.getLogger().severe("Could not update UUID for " + userName + "!");
+                            mcMMO.p.getLogger().severe("Database entry is invalid.");
+                            continue;
+                        }
+
+                        line = line.replace(character[41], uuid.toString());
+                        worked = true;
+                    }
+
+                    i++;
+                    writer.append(line).append("\r\n");
+                }
+
+                out = new FileWriter(usersFilePath); // Write out the new file
+                out.write(writer.toString());
+            }
+            catch (Exception e) {
+                mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
+            }
+            finally {
+                mcMMO.p.getLogger().info(i + " entries written while saving UUID for " + userName);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+            }
+        }
+
+        return worked;
+    }
+
+    public boolean saveUserUUIDs(Map<String, UUID> fetchedUUIDs) {
+        BufferedReader in = null;
+        FileWriter out = null;
+        String usersFilePath = mcMMO.getUsersFilePath();
+        int i = 0;
+
+        synchronized (fileWritingLock) {
+            try {
+                in = new BufferedReader(new FileReader(usersFilePath));
+                StringBuilder writer = new StringBuilder();
+                String line;
+
+                while (((line = in.readLine()) != null)) {
+                    String[] character = line.split(":");
+                    if (!fetchedUUIDs.isEmpty() && fetchedUUIDs.containsKey(character[0])) {
+                        if (character.length < 42) {
+                            mcMMO.p.getLogger().severe("Could not update UUID for " + character[0] + "!");
+                            mcMMO.p.getLogger().severe("Database entry is invalid.");
+                            continue;
+                        }
+
+                        character[41] = fetchedUUIDs.remove(character[0]).toString();
+                        line = new StringBuilder(org.apache.commons.lang.StringUtils.join(character, ":")).append(":").toString();
+                    }
+
+                    i++;
+                    writer.append(line).append("\r\n");
+                }
+
+                out = new FileWriter(usersFilePath); // Write out the new file
+                out.write(writer.toString());
+            }
+            catch (Exception e) {
+                mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
+            }
+            finally {
+                mcMMO.p.getLogger().info(i + " entries written while saving UUID batch");
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+                if (out != null) {
+                    try {
+                        out.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
+            }
+        }
+
+        return true;
     }
 
     public List<String> getStoredUsers() {
@@ -475,7 +709,14 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 e.printStackTrace();
             }
             finally {
-                tryClose(in);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
         return users;
@@ -515,7 +756,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
         synchronized (fileWritingLock) {
             try {
                 in = new BufferedReader(new FileReader(usersFilePath));
-                String line = "";
+                String line;
 
                 while ((line = in.readLine()) != null) {
                     String[] data = line.split(":");
@@ -545,7 +786,14 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " during user " + playerName + " (Are you sure you formatted it correctly?) " + e.toString());
             }
             finally {
-                tryClose(in);
+                if (in != null) {
+                    try {
+                        in.close();
+                    }
+                    catch (IOException e) {
+                        // Ignore
+                    }
+                }
             }
         }
 
@@ -594,7 +842,8 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                 try {
                     in = new BufferedReader(new FileReader(usersFilePath));
                     StringBuilder writer = new StringBuilder();
-                    String line = "";
+                    String line;
+                    HashSet<String> usernames = new HashSet<String>();
                     HashSet<String> players = new HashSet<String>();
 
                     while ((line = in.readLine()) != null) {
@@ -605,12 +854,17 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
 
                         // Length checks depend on last character being ':'
                         if (line.charAt(line.length() - 1) != ':') {
-                            line = line + ":";
+                            line = line.concat(":");
                         }
                         String[] character = line.split(":");
 
+                        // Prevent the same username from being present multiple times
+                        if (!usernames.add(character[0])) {
+                            continue;
+                        }
+
                         // Prevent the same player from being present multiple times
-                        if (!players.add(character[0])) {
+                        if (character.length >= 42 && (!character[41].isEmpty() && !players.add(character[41]))) {
                             continue;
                         }
 
@@ -622,29 +876,33 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
 
                         String oldVersion = null;
 
+                        if (character.length <= 33) {
+                            // Introduction of HUDType
+                            // Version 1.1.06
+                            // commit 78f79213cdd7190cd11ae54526f3b4ea42078e8a
+                            line = line.concat(" :");
+                            character = line.split(":");
+                            oldVersion = "1.1.06";
+                        }
+
                         if (!character[33].isEmpty()) {
                             // Removal of Spout Support
                             // Version 1.4.07-dev2
                             // commit 7bac0e2ca5143bce84dc160617fed97f0b1cb968
                             line = line.replace(character[33], "");
-                            oldVersion = "1.4.07";
+                            if (oldVersion == null) {
+                                oldVersion = "1.4.07";
+                            }
                         }
 
                         // If they're valid, rewrite them to the file.
-                        if (character.length > 40) {
+                        if (character.length == 43) {
                             writer.append(line).append("\r\n");
                             continue;
                         }
 
                         StringBuilder newLine = new StringBuilder(line);
 
-                        if (character.length <= 33) {
-                            // Introduction of HUDType
-                            // Version 1.1.06
-                            // commit 78f79213cdd7190cd11ae54526f3b4ea42078e8a
-                            newLine.append(":");
-                            oldVersion = "1.1.06";
-                        }
                         if (character.length <= 35) {
                             // Introduction of Fishing
                             // Version 1.2.00
@@ -683,7 +941,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                                 oldVersion = "1.4.06";
                             }
                         }
-                        if (character.length <= 40) {
+                        if (character.length <= 39) {
                             // Addition of Alchemy
                             // Version 1.4.08
                             newLine.append("0").append(":");
@@ -692,9 +950,70 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                                 oldVersion = "1.4.08";
                             }
                         }
+                        if (character.length <= 41) {
+                            // Addition of UUIDs
+                            // Version 1.5.01
+                            // Add a value because otherwise it gets removed
+                            newLine.append("NULL:");
+                            if (oldVersion == null) {
+                                oldVersion = "1.5.01";
+                            }
+                        }
+                        if (character.length <= 42) {
+                            // Addition of scoreboard tips auto disable
+                            // Version 1.5.02
+                            newLine.append("0").append(":");
+                            if (oldVersion == null) {
+                                oldVersion = "1.5.02";
+                            }
+                        }
+
+                        // Remove any blanks that shouldn't be there, and validate the other fields
+                        String[] newCharacter = newLine.toString().split(":");
+                        boolean corrupted = false;
+
+                        for (int i = 0; i < newCharacter.length; i++) {
+                            if (newCharacter[i].isEmpty() && !(i == 2 || i == 3 || i == 23 || i == 33 || i == 41)) {
+                                corrupted = true;
+
+                                if (newCharacter.length != 43) {
+                                    newCharacter = (String[]) ArrayUtils.remove(newCharacter, i);
+                                }
+                                else {
+                                    if (i == 37) {
+                                        newCharacter[i] = String.valueOf(System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR);
+                                    }
+                                    else if (i == 38) {
+                                        newCharacter[i] = Config.getInstance().getMobHealthbarDefault().toString();
+                                    }
+                                    else {
+                                        newCharacter[i] = "0";
+                                    }
+                                }
+                            }
+
+                            if (StringUtils.isInt(newCharacter[i]) && i == 38) {
+                                corrupted = true;
+                                newCharacter[i] = Config.getInstance().getMobHealthbarDefault().toString();
+                            }
+
+                            if (!StringUtils.isInt(newCharacter[i]) && !(i == 0 || i == 2 || i == 3 || i == 23 || i == 33 || i == 38 || i == 41)) {
+                                corrupted = true;
+                                newCharacter[i] = "0";
+                            }
+                        }
+
+                        if (corrupted) {
+                            mcMMO.p.debug("Updating corrupted database line for player " + newCharacter[0]);
+                        }
 
                         if (oldVersion != null) {
-                            mcMMO.p.debug("Updating database line for player " + character[0] + " from before version " + oldVersion);
+                            mcMMO.p.debug("Updating database line from before version " + oldVersion + " for player " + character[0]);
+                        }
+
+                        if (corrupted || oldVersion != null) {
+                            newLine = new StringBuilder(org.apache.commons.lang.StringUtils.join(newCharacter, ":"));
+                            newLine = newLine.append(":");
                         }
 
                         writer.append(newLine).append("\r\n");
@@ -708,10 +1027,32 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
                     mcMMO.p.getLogger().severe("Exception while reading " + usersFilePath + " (Are you sure you formatted it correctly?)" + e.toString());
                 }
                 finally {
-                    tryClose(in);
-                    tryClose(out);
+                    if (in != null) {
+                        try {
+                            in.close();
+                        }
+                        catch (IOException e) {
+                            // Ignore
+                        }
+                    }
+                    if (out != null) {
+                        try {
+                            out.close();
+                        }
+                        catch (IOException e) {
+                            // Ignore
+                        }
+                    }
                 }
             }
+
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.ADD_FISHING);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.ADD_BLAST_MINING_COOLDOWN);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.ADD_SQL_INDEXES);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.ADD_MOB_HEALTHBARS);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.DROP_SQL_PARTY_NAMES);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.DROP_SPOUT);
+            mcMMO.getUpgradeManager().setUpgradeCompleted(UpgradeType.ADD_ALCHEMY);
             return;
         }
 
@@ -720,18 +1061,6 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
         try {
             mcMMO.p.debug("Creating mcmmo.users file...");
             new File(mcMMO.getUsersFilePath()).createNewFile();
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void tryClose(Closeable c) {
-        if (c == null) {
-            return;
-        }
-        try {
-            c.close();
         }
         catch (IOException e) {
             e.printStackTrace();
@@ -768,11 +1097,12 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
         }
     }
 
-    private PlayerProfile loadFromLine(String[] character) throws Exception {
+    private PlayerProfile loadFromLine(String[] character) {
         Map<SkillType, Integer>   skills     = getSkillMapFromLine(character);      // Skill levels
-        Map<SkillType, Float>     skillsXp   = new HashMap<SkillType, Float>();     // Skill & XP
-        Map<AbilityType, Integer> skillsDATS = new HashMap<AbilityType, Integer>(); // Ability & Cooldown
+        Map<SkillType, Float>     skillsXp   = new EnumMap<SkillType, Float>(SkillType.class);     // Skill & XP
+        Map<AbilityType, Integer> skillsDATS = new EnumMap<AbilityType, Integer>(AbilityType.class); // Ability & Cooldown
         MobHealthbarType mobHealthbarType;
+        int scoreboardTipsShown;
 
         // TODO on updates, put new values in a try{} ?
 
@@ -810,11 +1140,26 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
             mobHealthbarType = Config.getInstance().getMobHealthbarDefault();
         }
 
-        return new PlayerProfile(character[0], skills, skillsXp, skillsDATS, mobHealthbarType);
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(character[41]);
+        }
+        catch (Exception e) {
+            uuid = null;
+        }
+
+        try {
+            scoreboardTipsShown = Integer.valueOf(character[42]);
+        }
+        catch (Exception e) {
+            scoreboardTipsShown = 0;
+        }
+
+        return new PlayerProfile(character[0], uuid, skills, skillsXp, skillsDATS, mobHealthbarType, scoreboardTipsShown);
     }
 
     private Map<SkillType, Integer> getSkillMapFromLine(String[] character) {
-        Map<SkillType, Integer> skills = new HashMap<SkillType, Integer>();   // Skill & Level
+        Map<SkillType, Integer> skills = new EnumMap<SkillType, Integer>(SkillType.class);   // Skill & Level
 
         skills.put(SkillType.TAMING, Integer.valueOf(character[24]));
         skills.put(SkillType.MINING, Integer.valueOf(character[1]));
@@ -836,4 +1181,7 @@ public final class FlatfileDatabaseManager implements DatabaseManager {
     public DatabaseType getDatabaseType() {
         return DatabaseType.FLATFILE;
     }
+
+    @Override
+    public void onDisable() { }
 }

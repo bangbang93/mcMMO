@@ -3,15 +3,17 @@ package com.gmail.nossr50.datatypes.player;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
+import com.gmail.nossr50.runnables.skills.BleedTimerTask;
+import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.scoreboards.ScoreboardManager;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.Server;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -24,6 +26,7 @@ import com.gmail.nossr50.datatypes.party.PartyTeleportRecord;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
+import com.gmail.nossr50.datatypes.skills.XPGainReason;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.party.PartyManager;
 import com.gmail.nossr50.party.ShareHandler;
@@ -40,6 +43,7 @@ import com.gmail.nossr50.skills.fishing.FishingManager;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.repair.RepairManager;
+import com.gmail.nossr50.skills.salvage.SalvageManager;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.swords.SwordsManager;
 import com.gmail.nossr50.skills.taming.TamingManager;
@@ -47,7 +51,6 @@ import com.gmail.nossr50.skills.unarmed.UnarmedManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.Misc;
-import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.skills.ParticleEffectUtils;
@@ -80,7 +83,6 @@ public class McMMOPlayer {
     private final Map<AbilityType, Boolean> abilityInformed = new HashMap<AbilityType, Boolean>();
 
     private final Map<ToolType, Boolean> toolMode = new HashMap<ToolType, Boolean>();
-    private final Map<ToolType, Integer> toolATS  = new HashMap<ToolType, Integer>();
 
     private int recentlyHurt;
     private int respawnATS;
@@ -92,14 +94,23 @@ public class McMMOPlayer {
     private boolean isUsingUnarmed;
     private final FixedMetadataValue playerMetadata;
 
-    public McMMOPlayer(Player player) {
+    public McMMOPlayer(Player player, PlayerProfile profile) {
         String playerName = player.getName();
+        UUID uuid = player.getUniqueId();
 
         this.player = player;
         playerMetadata = new FixedMetadataValue(mcMMO.p, playerName);
-        profile = mcMMO.getDatabaseManager().loadPlayerProfile(playerName, true);
-        party = PartyManager.getPlayerParty(playerName);
+        this.profile = profile;
+        party = PartyManager.getPlayerParty(playerName, uuid);
         ptpRecord = new PartyTeleportRecord();
+
+        if (inParty()) {
+            loginParty();
+        }
+
+        if (profile.getUniqueId() == null) {
+            profile.setUniqueId(uuid);
+        }
 
         /*
          * I'm using this method because it makes code shorter and safer (we don't have to add all SkillTypes manually),
@@ -123,70 +134,6 @@ public class McMMOPlayer {
 
         for (ToolType toolType : ToolType.values()) {
             toolMode.put(toolType, false);
-            toolATS.put(toolType, 0);
-        }
-
-        if (!profile.isLoaded()) {
-            mcMMO.p.getLogger().warning("Unable to load the PlayerProfile for " + playerName + ". Will retry over the next several seconds.");
-            new RetryProfileLoadingTask().runTaskTimerAsynchronously(mcMMO.p, 11L, 31L);
-        }
-    }
-
-    private class RetryProfileLoadingTask extends BukkitRunnable {
-        private static final int MAX_TRIES = 5;
-        private final String playerName = McMMOPlayer.this.player.getName();
-        private int attempt = 0;
-
-        // WARNING: ASYNC TASK
-        // DO NOT MODIFY THE McMMOPLAYER FROM THIS CODE
-        @Override
-        public void run() {
-            // Quit if they logged out
-            if (!player.isOnline()) {
-                mcMMO.p.getLogger().info("Aborting profile loading recovery for " + playerName + " - player logged out");
-                this.cancel();
-                return;
-            }
-
-            // Send the message that we're doing the recovery
-            if (attempt == 0) {
-                player.sendMessage(LocaleLoader.getString("Recovery.Notice"));
-            }
-
-            // Increment attempt counter and try
-            attempt++;
-            PlayerProfile profile = mcMMO.getDatabaseManager().loadPlayerProfile(playerName, true);
-            // If successful, schedule the apply
-            if (profile.isLoaded()) {
-                new ApplySuccessfulProfile(profile).runTask(mcMMO.p);
-                player.sendMessage(LocaleLoader.getString("Recovery.Success"));
-                this.cancel();
-                return;
-            }
-
-            // If we've failed five times, give up
-            if (attempt >= MAX_TRIES) {
-                mcMMO.p.getLogger().severe("Giving up on attempting to load the PlayerProfile for " + playerName);
-                mcMMO.p.getServer().broadcast(LocaleLoader.getString("Recovery.AdminFailureNotice", playerName), Server.BROADCAST_CHANNEL_ADMINISTRATIVE);
-                player.sendMessage(LocaleLoader.getString("Recovery.Failure").split("\n"));
-                this.cancel();
-                return;
-            }
-        }
-    }
-
-    private class ApplySuccessfulProfile extends BukkitRunnable {
-        private final PlayerProfile profile;
-
-        private ApplySuccessfulProfile(PlayerProfile profile) {
-            this.profile = profile;
-        }
-
-        // Synchronized task
-        // No database access permitted
-        @Override
-        public void run() {
-            McMMOPlayer.this.profile = profile;
         }
     }
 
@@ -224,6 +171,10 @@ public class McMMOPlayer {
 
     public RepairManager getRepairManager() {
         return (RepairManager) skillManagers.get(SkillType.REPAIR);
+    }
+
+    public SalvageManager getSalvageManager() {
+        return (SalvageManager) skillManagers.get(SkillType.SALVAGE);
     }
 
     public SmeltingManager getSmeltingManager() {
@@ -341,28 +292,6 @@ public class McMMOPlayer {
         toolMode.put(tool, isPrepared);
     }
 
-    /**
-     * Get the current prep ATS of a tool.
-     *
-     * @param tool Tool to get the ATS for
-     * @return the ATS for the tool
-     */
-    public long getToolPreparationATS(ToolType tool) {
-        return toolATS.get(tool);
-    }
-
-    /**
-     * Set the current prep ATS of a tool.
-     *
-     * @param tool Tool to set the ATS for
-     * @param ATS the ATS of the tool
-     */
-    public void setToolPreparationATS(ToolType tool, long ATS) {
-        int startTime = (int) (ATS / Misc.TIME_CONVERSION_FACTOR);
-
-        toolATS.put(tool, startTime);
-    }
-
     /*
      * Recently Hurt
      */
@@ -478,7 +407,7 @@ public class McMMOPlayer {
      * @param skill Skill being used
      * @param xp Experience amount to process
      */
-    public void beginXpGain(SkillType skill, float xp) {
+    public void beginXpGain(SkillType skill, float xp, XPGainReason xpGainReason) {
         Validate.isTrue(xp >= 0.0, "XP gained should be greater than or equal to zero.");
 
         if (xp <= 0.0) {
@@ -491,7 +420,7 @@ public class McMMOPlayer {
 
             for (SkillType parentSkill : parentSkills) {
                 if (parentSkill.getPermissions(player)) {
-                    beginXpGain(parentSkill, splitXp);
+                    beginXpGain(parentSkill, splitXp, xpGainReason);
                 }
             }
 
@@ -499,11 +428,11 @@ public class McMMOPlayer {
         }
 
         // Return if the experience has been shared
-        if (party != null && ShareHandler.handleXpShare(xp, this, skill)) {
+        if (party != null && ShareHandler.handleXpShare(xp, this, skill, ShareHandler.getSharedXpGainReason(xpGainReason))) {
             return;
         }
 
-        beginUnsharedXpGain(skill, xp);
+        beginUnsharedXpGain(skill, xp, xpGainReason);
     }
 
     /**
@@ -512,8 +441,8 @@ public class McMMOPlayer {
      * @param skill Skill being used
      * @param xp Experience amount to process
      */
-    public void beginUnsharedXpGain(SkillType skill, float xp) {
-        applyXpGain(skill, modifyXpGain(skill, xp));
+    public void beginUnsharedXpGain(SkillType skill, float xp, XPGainReason xpGainReason) {
+        applyXpGain(skill, modifyXpGain(skill, xp), xpGainReason);
 
         if (party == null) {
             return;
@@ -530,7 +459,7 @@ public class McMMOPlayer {
      * @param skillType Skill being used
      * @param xp Experience amount to add
      */
-    public void applyXpGain(SkillType skillType, float xp) {
+    public void applyXpGain(SkillType skillType, float xp, XPGainReason xpGainReason) {
         if (!skillType.getPermissions(player)) {
             return;
         }
@@ -539,18 +468,18 @@ public class McMMOPlayer {
             Set<SkillType> parentSkills = FamilyTree.getParents(skillType);
 
             for (SkillType parentSkill : parentSkills) {
-                applyXpGain(parentSkill, xp / parentSkills.size());
+                applyXpGain(parentSkill, xp / parentSkills.size(), xpGainReason);
             }
 
             return;
         }
 
-        if (!EventUtils.handleXpGainEvent(player, skillType, xp)) {
+        if (!EventUtils.handleXpGainEvent(player, skillType, xp, xpGainReason)) {
             return;
         }
 
         isUsingUnarmed = (skillType == SkillType.UNARMED);
-        checkXp(skillType);
+        checkXp(skillType, xpGainReason);
     }
 
     /**
@@ -558,7 +487,7 @@ public class McMMOPlayer {
      *
      * @param skillType The skill to check
      */
-    private void checkXp(SkillType skillType) {
+    private void checkXp(SkillType skillType, XPGainReason xpGainReason) {
         if (getSkillXpLevelRaw(skillType) < getXpToLevel(skillType)) {
             return;
         }
@@ -576,7 +505,7 @@ public class McMMOPlayer {
             levelsGained++;
         }
 
-        if (!EventUtils.handleLevelChangeEvent(player, skillType, levelsGained, xpRemoved, true)) {
+        if (!EventUtils.handleLevelChangeEvent(player, skillType, levelsGained, xpRemoved, true, xpGainReason)) {
             return;
         }
 
@@ -593,10 +522,6 @@ public class McMMOPlayer {
 
     public Player getPlayer() {
         return player;
-    }
-
-    public void setPlayer(Player player) {
-        this.player = player;
     }
 
     public PlayerProfile getProfile() {
@@ -657,6 +582,10 @@ public class McMMOPlayer {
 
     public void removePartyAllianceInvite() {
         allianceInvite = null;
+    }
+
+    public void loginParty() {
+        party.addOnlineMember(this.getPlayer());
     }
 
     public int getItemShareModifier() {
@@ -725,12 +654,12 @@ public class McMMOPlayer {
         switch (mode) {
             case ADMIN:
                 adminChatMode = !adminChatMode;
-                partyChatMode = adminChatMode ? false : partyChatMode;
+                partyChatMode = !adminChatMode && partyChatMode;
                 return;
 
             case PARTY:
                 partyChatMode = !partyChatMode;
-                adminChatMode = partyChatMode ? false : adminChatMode;
+                adminChatMode = !partyChatMode && adminChatMode;
                 return;
 
             default:
@@ -757,7 +686,7 @@ public class McMMOPlayer {
         xp = (float) (xp / skillType.getXpModifier() * ExperienceConfig.getInstance().getExperienceGainsGlobalMultiplier());
 
         if (Config.getInstance().getToolModsEnabled()) {
-            CustomTool tool = ModUtils.getToolFromItemStack(player.getItemInHand());
+            CustomTool tool = mcMMO.getModManager().getTool(player.getItemInHand());
 
             if (tool != null) {
                 xp *= tool.getXpMultiplier();
@@ -843,7 +772,7 @@ public class McMMOPlayer {
 
         ItemStack inHand = player.getItemInHand();
 
-        if (ModUtils.isCustomTool(inHand) && !ModUtils.getToolFromItemStack(inHand).isAbilityEnabled()) {
+        if (mcMMO.getModManager().isCustomTool(inHand) && !mcMMO.getModManager().getTool(inHand).isAbilityEnabled()) {
             return;
         }
 
@@ -878,7 +807,6 @@ public class McMMOPlayer {
                 player.sendMessage(tool.getRaiseTool());
             }
 
-            setToolPreparationATS(tool, System.currentTimeMillis());
             setToolPreparationMode(tool, true);
             new ToolLowerTask(this, tool).runTaskLaterAsynchronously(mcMMO.p, 4 * Misc.TICK_CONVERSION_FACTOR);
         }
@@ -949,5 +877,29 @@ public class McMMOPlayer {
 
     public FixedMetadataValue getPlayerMetadata() {
         return playerMetadata;
+    }
+
+    /**
+     * This method is called by PlayerQuitEvent to tear down the mcMMOPlayer.
+     *
+     * @param syncSave if true, data is saved synchronously
+     */
+    public void logout(boolean syncSave) {
+        Player thisPlayer = getPlayer();
+        resetAbilityMode();
+        BleedTimerTask.bleedOut(thisPlayer);
+
+        if (syncSave) {
+            getProfile().save();
+        } else {
+            getProfile().scheduleAsyncSave();
+        }
+
+        UserManager.remove(thisPlayer);
+        ScoreboardManager.teardownPlayer(thisPlayer);
+
+        if (inParty()) {
+            party.removeOnlineMember(thisPlayer);
+        }
     }
 }

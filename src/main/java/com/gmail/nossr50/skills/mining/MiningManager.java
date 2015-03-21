@@ -1,6 +1,7 @@
 package com.gmail.nossr50.skills.mining;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 import org.bukkit.Material;
@@ -16,6 +17,7 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.datatypes.skills.XPGainReason;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.runnables.skills.AbilityCooldownTask;
 import com.gmail.nossr50.skills.SkillManager;
@@ -23,7 +25,6 @@ import com.gmail.nossr50.skills.mining.BlastMining.Tier;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.Misc;
-import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
@@ -33,7 +34,7 @@ public class MiningManager extends SkillManager {
     }
 
     public boolean canUseDemolitionsExpertise() {
-        return getSkillLevel() >= BlastMining.Tier.FOUR.getLevel() && Permissions.demolitionsExpertise(getPlayer());
+        return getSkillLevel() >= BlastMining.getDemolitionExpertUnlockLevel() && Permissions.demolitionsExpertise(getPlayer());
     }
 
     public boolean canDetonate() {
@@ -47,7 +48,7 @@ public class MiningManager extends SkillManager {
     }
 
     public boolean canUseBiggerBombs() {
-        return getSkillLevel() >= BlastMining.Tier.TWO.getLevel() && Permissions.biggerBombs(getPlayer());
+        return getSkillLevel() >= BlastMining.getBiggerBombsUnlockLevel() && Permissions.biggerBombs(getPlayer());
     }
 
     /**
@@ -58,7 +59,7 @@ public class MiningManager extends SkillManager {
     public void miningBlockCheck(BlockState blockState) {
         Player player = getPlayer();
 
-        applyXpGain(Mining.getBlockXp(blockState));
+        applyXpGain(Mining.getBlockXp(blockState), XPGainReason.PVE);
 
         if (!Permissions.secondaryAbilityEnabled(player, SecondaryAbility.MINING_DOUBLE_DROPS)) {
             return;
@@ -70,7 +71,7 @@ public class MiningManager extends SkillManager {
             SkillUtils.handleDurabilityChange(getPlayer().getItemInHand(), Config.getInstance().getAbilityToolDamage());
         }
 
-        if ((ModUtils.isCustomMiningBlock(blockState) && !ModUtils.getCustomBlock(blockState).isDoubleDropEnabled()) || material != Material.GLOWING_REDSTONE_ORE && !Config.getInstance().getDoubleDropsEnabled(skill, material)) {
+        if ((mcMMO.getModManager().isCustomMiningBlock(blockState) && !mcMMO.getModManager().getBlock(blockState).isDoubleDropEnabled()) || material != Material.GLOWING_REDSTONE_ORE && !Config.getInstance().getDoubleDropsEnabled(skill, material)) {
             return;
         }
 
@@ -93,7 +94,7 @@ public class MiningManager extends SkillManager {
      */
     public void remoteDetonation() {
         Player player = getPlayer();
-        Block targetBlock = player.getTargetBlock(BlockUtils.getTransparentBlocks(), BlastMining.MAXIMUM_REMOTE_DETONATION_DISTANCE);
+        Block targetBlock = player.getTargetBlock((HashSet<Byte>) BlockUtils.getTransparentBlocks(), BlastMining.MAXIMUM_REMOTE_DETONATION_DISTANCE);
 
         if (targetBlock.getType() != Material.TNT || !EventUtils.simulateBlockBreak(targetBlock, player, true) || !blastMiningCooldownOver()) {
             return;
@@ -116,8 +117,8 @@ public class MiningManager extends SkillManager {
     /**
      * Handler for explosion drops and XP gain.
      *
-     * @param yield
-     * @param blockList
+     * @param yield The % of blocks to drop
+     * @param blockList The list of blocks to drop
      */
     public void blastMiningDropProcessing(float yield, List<Block> blockList) {
         List<BlockState> ores = new ArrayList<BlockState>();
@@ -165,7 +166,7 @@ public class MiningManager extends SkillManager {
             }
         }
 
-        applyXpGain(xp);
+        applyXpGain(xp, XPGainReason.PVE);
     }
 
     /**

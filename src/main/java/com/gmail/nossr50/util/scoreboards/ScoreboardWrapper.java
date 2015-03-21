@@ -28,7 +28,6 @@ import com.gmail.nossr50.util.scoreboards.ScoreboardManager.SidebarType;
 import org.apache.commons.lang.Validate;
 
 public class ScoreboardWrapper {
-
     // Initialization variables
     public final String playerName;
     private final Scoreboard scoreboard;
@@ -59,7 +58,7 @@ public class ScoreboardWrapper {
             powerObjective.setDisplaySlot(DisplaySlot.BELOW_NAME);
 
             for (McMMOPlayer mcMMOPlayer : UserManager.getPlayers()) {
-                powerObjective.getScore(mcMMOPlayer.getPlayer()).setScore(mcMMOPlayer.getPowerLevel());
+                powerObjective.getScore(mcMMOPlayer.getProfile().getPlayerName()).setScore(mcMMOPlayer.getPowerLevel());
             }
         }
     }
@@ -69,6 +68,7 @@ public class ScoreboardWrapper {
     }
 
     public BukkitTask updateTask = null;
+
     private class ScoreboardQuickUpdate extends BukkitRunnable {
         @Override
         public void run() {
@@ -78,6 +78,7 @@ public class ScoreboardWrapper {
     }
 
     public BukkitTask revertTask = null;
+
     private class ScoreboardChangeTask extends BukkitRunnable {
         @Override
         public void run() {
@@ -87,6 +88,7 @@ public class ScoreboardWrapper {
     }
 
     public BukkitTask cooldownTask = null;
+
     private class ScoreboardCooldownTask extends BukkitRunnable {
         @Override
         public void run() {
@@ -121,7 +123,8 @@ public class ScoreboardWrapper {
             try {
                 cooldownTask.cancel();
             }
-            catch (Throwable ignored) {}
+            catch (Throwable ignored) {
+            }
 
             cooldownTask = null;
         }
@@ -196,6 +199,13 @@ public class ScoreboardWrapper {
 
         // TODO is there any way to do the time that looks acceptable?
         // player.sendMessage(LocaleLoader.getString("Commands.Scoreboard.Timer", StringUtils.capitalize(sidebarType.toString().toLowerCase()), ticks / 20F));
+
+        PlayerProfile profile = UserManager.getPlayer(player).getProfile();
+
+        if (profile.getScoreboardTipsShown() >= Config.getInstance().getTipsAmount()) {
+            return;
+        }
+
         if (!tippedKeep) {
             tippedKeep = true;
             player.sendMessage(LocaleLoader.getString("Commands.Scoreboard.Tip.Keep"));
@@ -203,6 +213,7 @@ public class ScoreboardWrapper {
         else if (!tippedClear) {
             tippedClear = true;
             player.sendMessage(LocaleLoader.getString("Commands.Scoreboard.Tip.Clear"));
+            profile.increaseTipsShown();
         }
     }
 
@@ -274,7 +285,7 @@ public class ScoreboardWrapper {
         targetProfile = null;
         leaderboardPage = -1;
 
-        loadObjective(ScoreboardManager.skillLabels.get(skill).getName());
+        loadObjective(ScoreboardManager.skillLabels.get(skill));
     }
 
     public void setTypeSelfStats() {
@@ -355,7 +366,7 @@ public class ScoreboardWrapper {
 
         int endPosition = page * 15;
         int startPosition = endPosition - 14;
-        loadObjective(String.format("%s (%2d - %2d)", ScoreboardManager.skillLabels.get(skill).getName(), startPosition, endPosition));
+        loadObjective(String.format("%s (%2d - %2d)", ScoreboardManager.skillLabels.get(skill), startPosition, endPosition));
     }
 
     // Setup for after a board type change
@@ -381,7 +392,8 @@ public class ScoreboardWrapper {
         try {
             updateTask.cancel();
         }
-        catch (Throwable ignored) {} // catch NullPointerException and IllegalStateException and any Error; don't care
+        catch (Throwable ignored) {
+        } // catch NullPointerException and IllegalStateException and any Error; don't care
 
         updateTask = null;
 
@@ -399,124 +411,123 @@ public class ScoreboardWrapper {
         McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
 
         switch (sidebarType) {
-        case NONE:
-            break;
+            case NONE:
+                break;
 
-        case SKILL_BOARD:
-            Validate.notNull(targetSkill);
+            case SKILL_BOARD:
+                Validate.notNull(targetSkill);
 
-            if (!targetSkill.isChildSkill()) {
-                int currentXP = mcMMOPlayer.getSkillXpLevel(targetSkill);
+                if (!targetSkill.isChildSkill()) {
+                    int currentXP = mcMMOPlayer.getSkillXpLevel(targetSkill);
 
-                sidebarObjective.getScore(ScoreboardManager.LABEL_CURRENT_XP).setScore(currentXP);
-                sidebarObjective.getScore(ScoreboardManager.LABEL_REMAINING_XP).setScore(mcMMOPlayer.getXpToLevel(targetSkill) - currentXP);
-            }
-            else {
-                for (SkillType parentSkill : FamilyTree.getParents(targetSkill)) {
-                    sidebarObjective.getScore(ScoreboardManager.skillLabels.get(parentSkill)).setScore(mcMMOPlayer.getSkillLevel(parentSkill));
-                }
-            }
-
-            sidebarObjective.getScore(ScoreboardManager.LABEL_LEVEL).setScore(mcMMOPlayer.getSkillLevel(targetSkill));
-
-            if (targetSkill.getAbility() != null) {
-                boolean stopUpdating;
-
-                if (targetSkill == SkillType.MINING) {
-                    // Special-Case: Mining has two abilities, both with cooldowns
-                    Score cooldownSB = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(AbilityType.SUPER_BREAKER));
-                    Score cooldownBM = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(AbilityType.BLAST_MINING));
-                    int secondsSB = Math.max(mcMMOPlayer.calculateTimeRemaining(AbilityType.SUPER_BREAKER), 0);
-                    int secondsBM = Math.max(mcMMOPlayer.calculateTimeRemaining(AbilityType.BLAST_MINING), 0);
-
-                    cooldownSB.setScore(secondsSB);
-                    cooldownBM.setScore(secondsBM);
-
-                    stopUpdating = (secondsSB == 0 && secondsBM == 0);
+                    sidebarObjective.getScore(ScoreboardManager.LABEL_CURRENT_XP).setScore(currentXP);
+                    sidebarObjective.getScore(ScoreboardManager.LABEL_REMAINING_XP).setScore(mcMMOPlayer.getXpToLevel(targetSkill) - currentXP);
                 }
                 else {
-                    AbilityType ability = targetSkill.getAbility();
-                    Score cooldown = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(ability));
+                    for (SkillType parentSkill : FamilyTree.getParents(targetSkill)) {
+                        sidebarObjective.getScore(ScoreboardManager.skillLabels.get(parentSkill)).setScore(mcMMOPlayer.getSkillLevel(parentSkill));
+                    }
+                }
+
+                sidebarObjective.getScore(ScoreboardManager.LABEL_LEVEL).setScore(mcMMOPlayer.getSkillLevel(targetSkill));
+
+                if (targetSkill.getAbility() != null) {
+                    boolean stopUpdating;
+
+                    if (targetSkill == SkillType.MINING) {
+                        // Special-Case: Mining has two abilities, both with cooldowns
+                        Score cooldownSB = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(AbilityType.SUPER_BREAKER));
+                        Score cooldownBM = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(AbilityType.BLAST_MINING));
+                        int secondsSB = Math.max(mcMMOPlayer.calculateTimeRemaining(AbilityType.SUPER_BREAKER), 0);
+                        int secondsBM = Math.max(mcMMOPlayer.calculateTimeRemaining(AbilityType.BLAST_MINING), 0);
+
+                        cooldownSB.setScore(secondsSB);
+                        cooldownBM.setScore(secondsBM);
+
+                        stopUpdating = (secondsSB == 0 && secondsBM == 0);
+                    }
+                    else {
+                        AbilityType ability = targetSkill.getAbility();
+                        Score cooldown = sidebarObjective.getScore(ScoreboardManager.abilityLabelsSkill.get(ability));
+                        int seconds = Math.max(mcMMOPlayer.calculateTimeRemaining(ability), 0);
+
+                        cooldown.setScore(seconds);
+
+                        stopUpdating = seconds == 0;
+                    }
+
+                    if (stopUpdating) {
+                        stopCooldownUpdating();
+                    }
+                    else {
+                        startCooldownUpdating();
+                    }
+                }
+                break;
+
+            case COOLDOWNS_BOARD:
+                boolean anyCooldownsActive = false;
+
+                for (AbilityType ability : AbilityType.values()) {
                     int seconds = Math.max(mcMMOPlayer.calculateTimeRemaining(ability), 0);
 
-                    cooldown.setScore(seconds);
+                    if (seconds != 0) {
+                        anyCooldownsActive = true;
+                    }
 
-                    stopUpdating = seconds == 0;
+                    sidebarObjective.getScore(ScoreboardManager.abilityLabelsColored.get(ability)).setScore(seconds);
                 }
 
-                if (stopUpdating) {
-                    stopCooldownUpdating();
-                }
-                else {
+                if (anyCooldownsActive) {
                     startCooldownUpdating();
                 }
-            }
-            break;
+                else {
+                    stopCooldownUpdating();
+                }
+                break;
 
-        case COOLDOWNS_BOARD:
-            boolean anyCooldownsActive = false;
+            case STATS_BOARD:
+                // Select the profile to read from
+                PlayerProfile newProfile;
 
-            for (AbilityType ability : AbilityType.values()) {
-                int seconds = Math.max(mcMMOPlayer.calculateTimeRemaining(ability), 0);
-
-                if (seconds != 0) {
-                    anyCooldownsActive = true;
+                if (targetProfile != null) {
+                    newProfile = targetProfile; // offline
+                }
+                else if (targetPlayer == null) {
+                    newProfile = mcMMOPlayer.getProfile(); // self
+                }
+                else {
+                    newProfile = UserManager.getPlayer(targetPlayer).getProfile(); // online
                 }
 
-                sidebarObjective.getScore(ScoreboardManager.abilityLabelsColored.get(ability)).setScore(seconds);
-            }
+                // Calculate power level here
+                int powerLevel = 0;
+                for (SkillType skill : SkillType.NON_CHILD_SKILLS) { // Don't include child skills, makes the list too long
+                    int level = newProfile.getSkillLevel(skill);
 
-            if (anyCooldownsActive) {
-                startCooldownUpdating();
-            }
-            else {
-                stopCooldownUpdating();
-            }
-            break;
-
-        case STATS_BOARD:
-            // Select the profile to read from
-            PlayerProfile newProfile;
-
-            if (targetProfile != null) {
-                newProfile = targetProfile; // offline
-            }
-            else if (targetPlayer == null) {
-                newProfile = mcMMOPlayer.getProfile(); // self
-            }
-            else {
-                newProfile = UserManager.getPlayer(targetPlayer).getProfile(); // online
-            }
-
-            // Calculate power level here
-            int powerLevel = 0;
-            for (SkillType skill : SkillType.values()) { // Include child skills, but not in power level
-                int level = newProfile.getSkillLevel(skill);
-
-                if (!skill.isChildSkill())
                     powerLevel += level;
 
-                // TODO: Verify that this is what we want - calculated in power level but not displayed
-                if (!skill.getPermissions(player)) {
-                    continue;
+                    // TODO: Verify that this is what we want - calculated in power level but not displayed
+                    if (!skill.getPermissions(player)) {
+                        continue;
+                    }
+
+                    sidebarObjective.getScore(ScoreboardManager.skillLabels.get(skill)).setScore(level);
                 }
 
-                sidebarObjective.getScore(ScoreboardManager.skillLabels.get(skill)).setScore(level);
-            }
+                sidebarObjective.getScore(ScoreboardManager.LABEL_POWER_LEVEL).setScore(powerLevel);
+                break;
 
-            sidebarObjective.getScore(ScoreboardManager.LABEL_POWER_LEVEL).setScore(powerLevel);
-            break;
-
-        case RANK_BOARD:
-        case TOP_BOARD:
+            case RANK_BOARD:
+            case TOP_BOARD:
             /*
              * @see #acceptRankData(Map<SkillType, Integer> rank)
              * @see #acceptLeaderboardData(List<PlayerStat> stats)
              */
-            break;
+                break;
 
-        default:
-            break;
+            default:
+                break;
         }
     }
 
@@ -551,11 +562,11 @@ public class ScoreboardWrapper {
                 name = ChatColor.GOLD + "--You--";
             }
 
-            sidebarObjective.getScore(mcMMO.p.getServer().getOfflinePlayer(name)).setScore(stat.statVal);
+            sidebarObjective.getScore(name).setScore(stat.statVal);
         }
     }
 
     public void updatePowerLevel(Player player, int newPowerLevel) {
-        powerObjective.getScore(player).setScore(newPowerLevel);
+        powerObjective.getScore(player.getName()).setScore(newPowerLevel);
     }
 }

@@ -1,6 +1,5 @@
 package com.gmail.nossr50.skills.herbalism;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -15,6 +14,7 @@ import org.bukkit.material.CocoaPlant;
 import org.bukkit.material.CocoaPlant.CocoaPlantSize;
 import org.bukkit.material.Crops;
 import org.bukkit.material.NetherWarts;
+import org.bukkit.metadata.FixedMetadataValue;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
@@ -26,6 +26,7 @@ import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
+import com.gmail.nossr50.datatypes.skills.XPGainReason;
 import com.gmail.nossr50.datatypes.treasure.HylianTreasure;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.runnables.skills.HerbalismBlockUpdaterTask;
@@ -33,7 +34,6 @@ import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.Misc;
-import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
@@ -115,8 +115,6 @@ public class HerbalismManager extends SkillManager {
     }
 
     /**
-     * 
-     *
      * @param blockState The {@link BlockState} to check ability activation for
      */
     public void herbalismBlockCheck(BlockState blockState) {
@@ -134,11 +132,11 @@ public class HerbalismManager extends SkillManager {
 
         Collection<ItemStack> drops = null;
         int amount = 1;
-        int xp = 0;
+        int xp;
         boolean greenTerra = mcMMOPlayer.getAbilityMode(skill.getAbility());
 
-        if (ModUtils.isCustomHerbalismBlock(blockState)) {
-            CustomBlock customBlock = ModUtils.getCustomBlock(blockState);
+        if (mcMMO.getModManager().isCustomHerbalismBlock(blockState)) {
+            CustomBlock customBlock = mcMMO.getModManager().getBlock(blockState);
             xp = customBlock.getXpGain();
 
             if (Permissions.secondaryAbilityEnabled(player, SecondaryAbility.HERBALISM_DOUBLE_DROPS) && customBlock.isDoubleDropEnabled()) {
@@ -150,7 +148,12 @@ public class HerbalismManager extends SkillManager {
                 processGreenThumbPlants(blockState, greenTerra);
             }
 
-            xp = ExperienceConfig.getInstance().getXp(skill, material);
+            if (material == Material.DOUBLE_PLANT || material == Material.RED_ROSE || material == Material.LONG_GRASS) {
+                xp = ExperienceConfig.getInstance().getFlowerAndGrassXp(blockState.getData());
+            }
+            else {
+                xp = ExperienceConfig.getInstance().getXp(skill, material);
+            }
 
             if (Config.getInstance().getDoubleDropsEnabled(skill, material) && Permissions.secondaryAbilityEnabled(player, SecondaryAbility.HERBALISM_DOUBLE_DROPS)) {
                 drops = blockState.getBlock().getDrops();
@@ -162,7 +165,7 @@ public class HerbalismManager extends SkillManager {
             }
         }
 
-        applyXpGain(xp);
+        applyXpGain(xp, XPGainReason.PVE);
 
         if (drops == null) {
             return;
@@ -203,7 +206,7 @@ public class HerbalismManager extends SkillManager {
             return false;
         }
 
-        List<HylianTreasure> treasures = new ArrayList<HylianTreasure>();
+        List<HylianTreasure> treasures;
 
         switch (blockState.getType()) {
             case DEAD_BUSH:
@@ -326,6 +329,8 @@ public class HerbalismManager extends SkillManager {
 
     private boolean handleBlockState(BlockState blockState, boolean greenTerra) {
         byte greenThumbStage = getGreenThumbStage();
+
+        blockState.setMetadata(mcMMO.greenThumbDataKey, new FixedMetadataValue(mcMMO.p, (int) (System.currentTimeMillis() / Misc.TIME_CONVERSION_FACTOR)));
 
         switch (blockState.getType()) {
             case CROPS:

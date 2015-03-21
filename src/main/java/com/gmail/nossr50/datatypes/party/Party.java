@@ -2,11 +2,14 @@ package com.gmail.nossr50.datatypes.party;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map.Entry;
+import java.util.UUID;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Sound;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import com.gmail.nossr50.mcMMO;
@@ -19,9 +22,10 @@ import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.Misc;
 
 public class Party {
-    private final LinkedHashSet<String> members = new LinkedHashSet<String>();
+    private final LinkedHashMap<UUID, String> members = new LinkedHashMap<UUID, String>();
+    private final List<Player> onlineMembers = new ArrayList<Player>();
 
-    private String leader;
+    private PartyLeader leader;
     private String name;
     private String password;
     private boolean locked;
@@ -42,14 +46,14 @@ public class Party {
         this.name = name;
     }
 
-    public Party(String leader, String name) {
+    public Party(PartyLeader leader, String name) {
         this.leader = leader;
         this.name = name;
         this.locked = true;
         this.level = 0;
     }
 
-    public Party(String leader, String name, String password) {
+    public Party(PartyLeader leader, String name, String password) {
         this.leader = leader;
         this.name = name;
         this.password = password;
@@ -57,7 +61,7 @@ public class Party {
         this.level = 0;
     }
 
-    public Party(String leader, String name, String password, boolean locked) {
+    public Party(PartyLeader leader, String name, String password, boolean locked) {
         this.leader = leader;
         this.name = name;
         this.password = password;
@@ -65,29 +69,40 @@ public class Party {
         this.level = 0;
     }
 
-    public LinkedHashSet<String> getMembers() {
+    public LinkedHashMap<UUID, String> getMembers() {
         return members;
     }
 
     public List<Player> getOnlineMembers() {
-        List<Player> onlineMembers = new ArrayList<Player>();
+        return onlineMembers;
+    }
 
-        for (String memberName : members) {
-            Player member = mcMMO.p.getServer().getPlayerExact(memberName);
+    public List<String> getOnlinePlayerNames(CommandSender sender) {
+        Player player = sender instanceof Player ? (Player) sender : null;
+        List<String> onlinePlayerNames = new ArrayList<String>();
 
-            if (member != null) {
-                onlineMembers.add(member);
+        for (Player onlinePlayer : getOnlineMembers()) {
+            if (player != null && player.canSee(onlinePlayer)) {
+                onlinePlayerNames.add(onlinePlayer.getName());
             }
         }
 
-        return onlineMembers;
+        return onlinePlayerNames;
+    }
+
+    public boolean addOnlineMember(Player player) {
+        return onlineMembers.add(player);
+    }
+
+    public boolean removeOnlineMember(Player player) {
+        return onlineMembers.remove(player);
     }
 
     public String getName() {
         return name;
     }
 
-    public String getLeader() {
+    public PartyLeader getLeader() {
         return leader;
     }
 
@@ -119,7 +134,7 @@ public class Party {
         this.name = name;
     }
 
-    public void setLeader(String leader) {
+    public void setLeader(PartyLeader leader) {
         this.leader = leader;
     }
 
@@ -171,7 +186,7 @@ public class Party {
 
     public String getXpToLevelPercentage() {
         DecimalFormat percent = new DecimalFormat("##0.00%");
-        return percent.format( this.getXp() / getXpToLevel());
+        return percent.format(this.getXp() / getXpToLevel());
     }
 
     /**
@@ -206,7 +221,8 @@ public class Party {
         }
 
         if (!Config.getInstance().getPartyInformAllMembers()) {
-            Player leader = mcMMO.p.getServer().getPlayer(this.leader);
+            Player leader = mcMMO.p.getServer().getPlayer(this.leader.getUniqueId());
+
             if (leader != null) {
                 leader.sendMessage(LocaleLoader.getString("Party.LevelUp", levelsGained, getLevel()));
 
@@ -289,13 +305,24 @@ public class Party {
         }
     }
 
+    public boolean hasMember(String memberName) {
+        return this.getMembers().values().contains(memberName);
+    }
+
+    public boolean hasMember(UUID uuid) {
+        return this.getMembers().keySet().contains(uuid);
+    }
+
     public String createMembersList(String playerName, List<Player> nearMembers) {
         StringBuilder memberList = new StringBuilder();
 
-        for (String memberName : this.getMembers()) {
-            Player member = mcMMO.p.getServer().getPlayerExact(memberName);
+        for (Entry<UUID, String> memberEntry : this.getMembers().entrySet()) {
+            UUID uuid = memberEntry.getKey();
+            String memberName = memberEntry.getValue();
 
-            if (this.getLeader().equalsIgnoreCase(memberName)) {
+            Player member = mcMMO.p.getServer().getPlayer(uuid);
+
+            if (this.getLeader().getUniqueId().equals(uuid)) {
                 memberList.append(ChatColor.GOLD);
 
                 if (member == null) {
@@ -310,7 +337,7 @@ public class Party {
             }
 
             if (!nearMembers.contains(member) && !playerName.equalsIgnoreCase(memberName)) {
-                memberList.append(ChatColor.ITALIC + "");
+                memberList.append(ChatColor.ITALIC).append("");
             }
 
             memberList.append(memberName).append(ChatColor.RESET).append(" ");
@@ -336,10 +363,5 @@ public class Party {
         }
 
         return this.getName().equals(other.getName());
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
     }
 }

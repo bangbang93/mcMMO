@@ -2,12 +2,12 @@ package com.gmail.nossr50.commands.player;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.StringUtil;
 
 import com.gmail.nossr50.mcMMO;
@@ -15,7 +15,6 @@ import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.runnables.commands.McrankCommandAsyncTask;
-import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.commands.CommandUtils;
 import com.gmail.nossr50.util.player.UserManager;
@@ -36,6 +35,10 @@ public class McrankCommand implements TabExecutor {
                     return true;
                 }
 
+                if (!CommandUtils.hasPlayerDataKey(sender)) {
+                    return true;
+                }
+
                 display(sender, sender.getName());
 
                 return true;
@@ -46,8 +49,12 @@ public class McrankCommand implements TabExecutor {
                     return true;
                 }
 
+                if (!CommandUtils.hasPlayerDataKey(sender)) {
+                    return true;
+                }
+
                 String playerName = CommandUtils.getMatchedPlayerName(args[0]);
-                McMMOPlayer mcMMOPlayer = UserManager.getPlayer(playerName, true);
+                McMMOPlayer mcMMOPlayer = UserManager.getOfflinePlayer(playerName);
 
                 if (mcMMOPlayer != null) {
                     Player player = mcMMOPlayer.getPlayer();
@@ -73,7 +80,7 @@ public class McrankCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         switch (args.length) {
             case 1:
-                Set<String> playerNames = UserManager.getPlayerNames();
+                List<String> playerNames = CommandUtils.getOnlinePlayerNames(sender);
                 return StringUtil.copyPartialMatches(args[0], playerNames, new ArrayList<String>(playerNames.size()));
             default:
                 return ImmutableList.of();
@@ -83,17 +90,25 @@ public class McrankCommand implements TabExecutor {
     private void display(CommandSender sender, String playerName) {
         if (sender instanceof Player) {
             McMMOPlayer mcMMOPlayer = UserManager.getPlayer(sender.getName());
+            long cooldownMillis = Math.max(Config.getInstance().getDatabasePlayerCooldown(), 1750);
 
-            if (mcMMOPlayer.getDatabaseATS() + Misc.PLAYER_DATABASE_COOLDOWN_MILLIS > System.currentTimeMillis()) {
+            if (mcMMOPlayer.getDatabaseATS() + cooldownMillis > System.currentTimeMillis()) {
                 sender.sendMessage(LocaleLoader.getString("Commands.Database.Cooldown"));
                 return;
+            }
+
+            if (((Player) sender).hasMetadata(mcMMO.databaseCommandKey)) {
+                sender.sendMessage(LocaleLoader.getString("Commands.Database.Processing"));
+                return;
+            } else {
+                ((Player) sender).setMetadata(mcMMO.databaseCommandKey, new FixedMetadataValue(mcMMO.p, null));
             }
 
             mcMMOPlayer.actualizeDatabaseATS();
         }
 
         boolean useBoard = (sender instanceof Player) && (Config.getInstance().getRankUseBoard());
-        boolean useChat = useBoard ? Config.getInstance().getRankUseChat() : true;
+        boolean useChat = !useBoard || Config.getInstance().getRankUseChat();
 
         new McrankCommandAsyncTask(playerName, sender, useBoard, useChat).runTaskAsynchronously(mcMMO.p);
     }

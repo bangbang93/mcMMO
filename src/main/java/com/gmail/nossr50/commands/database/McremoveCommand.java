@@ -2,7 +2,6 @@ package com.gmail.nossr50.commands.database;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -23,7 +22,7 @@ public class McremoveCommand implements TabExecutor {
             case 1:
                 String playerName = CommandUtils.getMatchedPlayerName(args[0]);
 
-                if (UserManager.getPlayer(playerName, true) == null && CommandUtils.unloadedProfile(sender, mcMMO.getDatabaseManager().loadPlayerProfile(playerName, false))) {
+                if (UserManager.getOfflinePlayer(playerName) == null && CommandUtils.unloadedProfile(sender, mcMMO.getDatabaseManager().loadPlayerProfile(playerName, false))) {
                     return true;
                 }
 
@@ -45,7 +44,7 @@ public class McremoveCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         switch (args.length) {
             case 1:
-                Set<String> playerNames = UserManager.getPlayerNames();
+                List<String> playerNames = CommandUtils.getOnlinePlayerNames(sender);
                 return StringUtil.copyPartialMatches(args[0], playerNames, new ArrayList<String>(playerNames.size()));
             default:
                 return ImmutableList.of();

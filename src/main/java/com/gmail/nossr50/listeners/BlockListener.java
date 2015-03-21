@@ -2,7 +2,9 @@ package com.gmail.nossr50.listeners;
 
 import java.util.List;
 
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
@@ -30,11 +32,15 @@ import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.events.fake.FakeBlockBreakEvent;
 import com.gmail.nossr50.events.fake.FakeBlockDamageEvent;
+import com.gmail.nossr50.runnables.PistonTrackerTask;
 import com.gmail.nossr50.runnables.StickyPistonTrackerTask;
 import com.gmail.nossr50.skills.alchemy.Alchemy;
 import com.gmail.nossr50.skills.excavation.ExcavationManager;
+import com.gmail.nossr50.skills.herbalism.Herbalism;
 import com.gmail.nossr50.skills.herbalism.HerbalismManager;
 import com.gmail.nossr50.skills.mining.MiningManager;
+import com.gmail.nossr50.skills.repair.Repair;
+import com.gmail.nossr50.skills.salvage.Salvage;
 import com.gmail.nossr50.skills.smelting.SmeltingManager;
 import com.gmail.nossr50.skills.woodcutting.WoodcuttingManager;
 import com.gmail.nossr50.util.BlockUtils;
@@ -59,27 +65,27 @@ public class BlockListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockPistonExtend(BlockPistonExtendEvent event) {
-        List<Block> blocks = event.getBlocks();
+        if (!EventUtils.shouldProcessEvent(event.getBlock(), true)) {
+            return;
+        }
+
         BlockFace direction = event.getDirection();
         Block futureEmptyBlock = event.getBlock().getRelative(direction); // Block that would be air after piston is finished
+
+        if (futureEmptyBlock.getType() == Material.AIR) {
+            return;
+        }
+
+        List<Block> blocks = event.getBlocks();
 
         for (Block b : blocks) {
             if (BlockUtils.shouldBeWatched(b.getState()) && mcMMO.getPlaceStore().isTrue(b)) {
                 b.getRelative(direction).setMetadata(mcMMO.blockMetadataKey, mcMMO.metadataValue);
-                if (b.equals(futureEmptyBlock)) {
-                    mcMMO.getPlaceStore().setFalse(b);
-                }
             }
         }
 
-        for (Block b : blocks) {
-            Block nextBlock = b.getRelative(direction);
-
-            if (nextBlock.hasMetadata(mcMMO.blockMetadataKey)) {
-                mcMMO.getPlaceStore().setTrue(nextBlock);
-                nextBlock.removeMetadata(mcMMO.blockMetadataKey, plugin);
-            }
-        }
+        // Needed because blocks sometimes don't move when two pistons push towards each other
+        new PistonTrackerTask(blocks, direction, futureEmptyBlock).runTaskLater(plugin, 2);
     }
 
     /**
@@ -89,10 +95,27 @@ public class BlockListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockPistonRetract(BlockPistonRetractEvent event) {
-        if (event.isSticky()) {
-            // Needed only because under some circumstances Minecraft doesn't move the block
-            new StickyPistonTrackerTask(event.getDirection(), event.getBlock()).runTaskLater(plugin, 2);
+        if (!EventUtils.shouldProcessEvent(event.getBlock(), false)) {
+            return;
         }
+
+        // Don't even work, return ALLWAYS false xD
+        /*if (!event.isSticky()){
+        	return;
+        }*/      
+        
+        // Sticky piston return PISTON_MOVING_PIECE and normal piston PISTON_BASE, so mess stuff
+        if (event.getBlock().getType() != Material.PISTON_MOVING_PIECE) {
+            return;
+        }
+
+        // event.getRetractLocation() return wrong side and too far away
+        // Get opposite direction so we get correct block, so mess stuff
+        Block movedBlock = event.getBlock().getRelative(event.getDirection().getOppositeFace());
+
+        // Needed only because under some circumstances Minecraft doesn't move the block
+        // Opposite side here too
+        new StickyPistonTrackerTask(event.getDirection().getOppositeFace(), event.getBlock(), movedBlock).runTaskLater(plugin, 2);
     }
 
     /**
@@ -104,7 +127,7 @@ public class BlockListener implements Listener {
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 
@@ -115,8 +138,13 @@ public class BlockListener implements Listener {
             mcMMO.getPlaceStore().setTrue(blockState);
         }
 
-        if (BlockUtils.isMcMMOAnvil(blockState)) {
-            UserManager.getPlayer(player).getRepairManager().placedAnvilCheck(blockState.getType());
+        McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
+
+        if (blockState.getType() == Repair.anvilMaterial && SkillType.REPAIR.getPermissions(player)) {
+            mcMMOPlayer.getRepairManager().placedAnvilCheck();
+        }
+        else if (blockState.getType() == Salvage.anvilMaterial && SkillType.SALVAGE.getPermissions(player)) {
+            mcMMOPlayer.getSalvageManager().placedAnvilCheck();
         }
     }
 
@@ -132,19 +160,20 @@ public class BlockListener implements Listener {
         }
 
         BlockState blockState = event.getBlock().getState();
+        Location location = blockState.getLocation();
 
         if (!BlockUtils.shouldBeWatched(blockState)) {
             return;
         }
 
         /* ALCHEMY - Cancel any brew in progress for that BrewingStand */
-        if (blockState instanceof BrewingStand && Alchemy.brewingStandMap.containsKey(event.getBlock())) {
-            Alchemy.brewingStandMap.get(event.getBlock()).cancelBrew();
+        if (blockState instanceof BrewingStand && Alchemy.brewingStandMap.containsKey(location)) {
+            Alchemy.brewingStandMap.get(location).cancelBrew();
         }
 
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
+        if (!UserManager.hasPlayerDataKey(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
@@ -176,7 +205,7 @@ public class BlockListener implements Listener {
         }
 
         /* WOOD CUTTING */
-        else if (BlockUtils.isLog(blockState) && SkillType.WOODCUTTING.getPermissions(player) && !mcMMO.getPlaceStore().isTrue(blockState)) {
+        else if (BlockUtils.isLog(blockState) && ItemUtils.isAxe(heldItem) && SkillType.WOODCUTTING.getPermissions(player) && !mcMMO.getPlaceStore().isTrue(blockState)) {
             WoodcuttingManager woodcuttingManager = mcMMOPlayer.getWoodcuttingManager();
 
             if (woodcuttingManager.canUseTreeFeller(heldItem)) {
@@ -214,12 +243,17 @@ public class BlockListener implements Listener {
 
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player) || player.getGameMode() == GameMode.CREATIVE) {
+        if (!UserManager.hasPlayerDataKey(player) || player.getGameMode() == GameMode.CREATIVE) {
             return;
         }
 
         BlockState blockState = event.getBlock().getState();
         ItemStack heldItem = player.getItemInHand();
+
+        if (Herbalism.isRecentlyRegrown(blockState)) {
+            event.setCancelled(true);
+            return;
+        }
 
         if (ItemUtils.isSword(heldItem)) {
             HerbalismManager herbalismManager = UserManager.getPlayer(player).getHerbalismManager();
@@ -236,7 +270,7 @@ public class BlockListener implements Listener {
                 }
             }
         }
-        else if (ItemUtils.isPickaxe(heldItem) && !heldItem.containsEnchantment(Enchantment.SILK_TOUCH)) {
+        else if (ItemUtils.isFluxPickaxe(heldItem) && !heldItem.containsEnchantment(Enchantment.SILK_TOUCH)) {
             SmeltingManager smeltingManager = UserManager.getPlayer(player).getSmeltingManager();
 
             if (smeltingManager.canUseFluxMining(blockState)) {
@@ -261,7 +295,7 @@ public class BlockListener implements Listener {
 
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 
@@ -327,7 +361,7 @@ public class BlockListener implements Listener {
 
         Player player = event.getPlayer();
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 

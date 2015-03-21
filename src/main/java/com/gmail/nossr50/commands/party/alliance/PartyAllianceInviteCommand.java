@@ -18,7 +18,7 @@ public class PartyAllianceInviteCommand implements CommandExecutor {
         switch (args.length) {
             case 3:
                 String targetName = CommandUtils.getMatchedPlayerName(args[2]);
-                McMMOPlayer mcMMOTarget = UserManager.getPlayer(targetName, true);
+                McMMOPlayer mcMMOTarget = UserManager.getOfflinePlayer(targetName);
 
                 if (!CommandUtils.checkPlayerExistence(sender, targetName, mcMMOTarget)) {
                     return false;
@@ -44,7 +44,7 @@ public class PartyAllianceInviteCommand implements CommandExecutor {
                     return true;
                 }
 
-                if (!mcMMOTarget.getParty().getLeader().equalsIgnoreCase(targetName)) {
+                if (!mcMMOTarget.getParty().getLeader().getUniqueId().equals(target.getUniqueId())) {
                     player.sendMessage(LocaleLoader.getString("Party.Target.NotOwner", targetName));
                     return true;
                 }

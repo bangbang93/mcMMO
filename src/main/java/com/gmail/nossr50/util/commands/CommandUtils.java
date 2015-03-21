@@ -58,11 +58,7 @@ public final class CommandUtils {
     }
 
     public static boolean hidden(CommandSender sender, Player target, boolean hasPermission) {
-        if (sender instanceof Player && !((Player)sender).canSee(target) && !hasPermission) {
-            return true;
-        }
-
-        return false;
+        return sender instanceof Player && !((Player) sender).canSee(target) && !hasPermission;
     }
 
     public static boolean noConsoleUsage(CommandSender sender) {
@@ -94,6 +90,10 @@ public final class CommandUtils {
      */
     public static boolean checkPlayerExistence(CommandSender sender, String playerName, McMMOPlayer mcMMOPlayer) {
         if (mcMMOPlayer != null) {
+            if (CommandUtils.hidden(sender, mcMMOPlayer.getPlayer(), false)) {
+                sender.sendMessage(LocaleLoader.getString("Commands.Offline"));
+                return false;
+            }
             return true;
         }
 
@@ -114,6 +114,29 @@ public final class CommandUtils {
 
         sender.sendMessage(LocaleLoader.getString("Commands.Offline"));
         return true;
+    }
+
+    public static boolean hasPlayerDataKey(CommandSender sender) {
+        if (sender == null || !(sender instanceof Player)) {
+            return false;
+        }
+
+        boolean hasPlayerDataKey = ((Player) sender).hasMetadata(mcMMO.playerDataKey);
+
+        if (!hasPlayerDataKey) {
+            sender.sendMessage(LocaleLoader.getString("Commands.NotLoaded"));
+        }
+
+        return hasPlayerDataKey;
+    }
+
+    public static boolean isLoaded(CommandSender sender, PlayerProfile profile) {
+        if (profile.isLoaded()) {
+            return true;
+        }
+
+        sender.sendMessage(LocaleLoader.getString("Commands.NotLoaded"));
+        return false;
     }
 
     public static boolean isInvalidInteger(CommandSender sender, String value) {
@@ -195,10 +218,10 @@ public final class CommandUtils {
 
     public static String displaySkill(PlayerProfile profile, SkillType skill) {
         if (skill.isChildSkill()) {
-            return LocaleLoader.getString("Skills.ChildStats", LocaleLoader.getString(StringUtils.getCapitalized(skill.toString()) + ".Listener"), profile.getSkillLevel(skill));
+            return LocaleLoader.getString("Skills.ChildStats", LocaleLoader.getString(StringUtils.getCapitalized(skill.toString()) + ".Listener") + " ", profile.getSkillLevel(skill));
         }
 
-        return LocaleLoader.getString("Skills.Stats", LocaleLoader.getString(StringUtils.getCapitalized(skill.toString()) + ".Listener"), profile.getSkillLevel(skill), profile.getSkillXpLevel(skill), profile.getXpToLevel(skill));
+        return LocaleLoader.getString("Skills.Stats", LocaleLoader.getString(StringUtils.getCapitalized(skill.toString()) + ".Listener") + " ", profile.getSkillLevel(skill), profile.getSkillXpLevel(skill), profile.getXpToLevel(skill));
     }
 
     private static void printGroupedSkillData(Player inspect, CommandSender display, String header, List<SkillType> skillGroup) {
@@ -218,6 +241,19 @@ public final class CommandUtils {
         if (size > 1) {
             display.sendMessage(displayData.toArray(new String[size]));
         }
+    }
+
+    public static List<String> getOnlinePlayerNames(CommandSender sender) {
+        Player player = sender instanceof Player ? (Player) sender : null;
+        List<String> onlinePlayerNames = new ArrayList<String>();
+
+        for (Player onlinePlayer : mcMMO.p.getServer().getOnlinePlayers()) {
+            if (player != null && player.canSee(onlinePlayer)) {
+                onlinePlayerNames.add(onlinePlayer.getName());
+            }
+        }
+
+        return onlinePlayerNames;
     }
 
     /**

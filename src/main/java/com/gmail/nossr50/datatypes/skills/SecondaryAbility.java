@@ -46,8 +46,11 @@ public enum SecondaryAbility {
     /* Repair */
     ARCANE_FORGING,
     REPAIR_MASTERY,
-    SALVAGE,
     SUPER_REPAIR,
+
+    /* Salvage */
+    ADVANCED_SALVAGE,
+    ARCANE_SALVAGE,
 
     /* Smelting */
     FLUX_MINING,
@@ -68,6 +71,7 @@ public enum SecondaryAbility {
     SHARPENED_CLAWS,
     SHOCK_PROOF,
     THICK_FUR,
+    PUMMEL,
 
     /* Unarmed */
     BLOCK_CRACKER,

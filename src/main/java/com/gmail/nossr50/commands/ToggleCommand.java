@@ -2,7 +2,6 @@ package com.gmail.nossr50.commands;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -26,6 +25,10 @@ public abstract class ToggleCommand implements TabExecutor {
 
                 if (!hasSelfPermission(sender)) {
                     sender.sendMessage(command.getPermissionMessage());
+                    return true;
+                }
+
+                if (!CommandUtils.hasPlayerDataKey(sender)) {
                     return true;
                 }
 
@@ -62,7 +65,7 @@ public abstract class ToggleCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         switch (args.length) {
             case 1:
-                Set<String> playerNames = UserManager.getPlayerNames();
+                List<String> playerNames = CommandUtils.getOnlinePlayerNames(sender);
                 return StringUtil.copyPartialMatches(args[0], playerNames, new ArrayList<String>(playerNames.size()));
             default:
                 return ImmutableList.of();

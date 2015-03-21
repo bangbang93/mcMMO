@@ -2,7 +2,7 @@ package com.gmail.nossr50.runnables.skills;
 
 import java.util.Arrays;
 
-import org.bukkit.block.Block;
+import org.bukkit.Location;
 import org.bukkit.block.BrewingStand;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -12,31 +12,29 @@ import com.gmail.nossr50.skills.alchemy.Alchemy;
 import com.gmail.nossr50.skills.alchemy.AlchemyPotionBrewer;
 
 public class AlchemyBrewCheckTask extends BukkitRunnable {
-    private final static int INGREDIENT_SLOT = 3;
-
     private Player player;
-    private Block brewingStand;
+    private BrewingStand brewingStand;
     private ItemStack[] oldInventory;
-    private ItemStack[] newInventory;
 
     public AlchemyBrewCheckTask(Player player, BrewingStand brewingStand) {
         this.player = player;
-        this.brewingStand = brewingStand.getBlock();
+        this.brewingStand = brewingStand;
         this.oldInventory = Arrays.copyOfRange(brewingStand.getInventory().getContents(), 0, 4);
     }
 
     @Override
     public void run() {
-        this.newInventory = Arrays.copyOfRange(((BrewingStand) brewingStand.getState()).getInventory().getContents(), 0, 4);
+        Location location = brewingStand.getLocation();
+        ItemStack[] newInventory = Arrays.copyOfRange(brewingStand.getInventory().getContents(), 0, 4);
+        boolean validBrew = AlchemyPotionBrewer.isValidBrew(player, newInventory);
 
-        if (Alchemy.brewingStandMap.containsKey(brewingStand)) {
-            if (oldInventory[INGREDIENT_SLOT] == null || newInventory[INGREDIENT_SLOT] == null || !oldInventory[INGREDIENT_SLOT].isSimilar(newInventory[INGREDIENT_SLOT]) || !AlchemyPotionBrewer.isValidBrew(player, newInventory)) {
-                Alchemy.brewingStandMap.get(brewingStand).cancelBrew();
+        if (Alchemy.brewingStandMap.containsKey(location)) {
+            if (oldInventory[Alchemy.INGREDIENT_SLOT] == null || newInventory[Alchemy.INGREDIENT_SLOT] == null || !oldInventory[Alchemy.INGREDIENT_SLOT].isSimilar(newInventory[Alchemy.INGREDIENT_SLOT]) || !validBrew) {
+                Alchemy.brewingStandMap.get(location).cancelBrew();
             }
         }
-        if (!Alchemy.brewingStandMap.containsKey(brewingStand) && AlchemyPotionBrewer.isValidBrew(player, newInventory)) {
-            Alchemy.brewingStandMap.put(brewingStand, new AlchemyBrewTask(brewingStand, player));
+        else if (validBrew) {
+            Alchemy.brewingStandMap.put(location, new AlchemyBrewTask(brewingStand, player));
         }
     }
-
 }

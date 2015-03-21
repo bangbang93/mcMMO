@@ -11,18 +11,19 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.material.Tree;
 
+import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.datatypes.mods.CustomBlock;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.datatypes.skills.XPGainReason;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.skills.woodcutting.Woodcutting.ExperienceGainMethod;
 import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
-import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
@@ -63,7 +64,7 @@ public class WoodcuttingManager extends SkillManager {
                 }
         }
 
-        applyXpGain(xp);
+        applyXpGain(xp, XPGainReason.PVE);
     }
 
     /**
@@ -83,7 +84,7 @@ public class WoodcuttingManager extends SkillManager {
         if (Woodcutting.treeFellerReachedThreshold) {
             Woodcutting.treeFellerReachedThreshold = false;
 
-            player.sendMessage(LocaleLoader.getString("Woodcutting.Skills.TreeFellerThreshold"));
+            player.sendMessage(LocaleLoader.getString("Woodcutting.Skills.TreeFeller.Threshold"));
             return;
         }
 
@@ -126,25 +127,29 @@ public class WoodcuttingManager extends SkillManager {
                 xp += Woodcutting.getExperienceFromLog(blockState, ExperienceGainMethod.TREE_FELLER);
                 Misc.dropItems(blockState.getLocation(), block.getDrops());
             }
-            else if (ModUtils.isCustomLogBlock(blockState)) {
+            else if (mcMMO.getModManager().isCustomLog(blockState)) {
                 if (canGetDoubleDrops()) {
                     Woodcutting.checkForDoubleDrop(blockState);
                 }
 
-                CustomBlock customBlock = ModUtils.getCustomBlock(blockState);
+                CustomBlock customBlock = mcMMO.getModManager().getBlock(blockState);
                 xp = customBlock.getXpGain();
 
                 Misc.dropItems(blockState.getLocation(), block.getDrops());
             }
-            else if (ModUtils.isCustomLeafBlock(blockState)) {
-                Misc.randomDropItems(blockState.getLocation(), block.getDrops(), 10.0);
+            else if (mcMMO.getModManager().isCustomLeaf(blockState)) {
+                Misc.dropItems(blockState.getLocation(), block.getDrops());
             }
             else {
-                Tree tree = (Tree) blockState.getData();
-                tree.setDirection(BlockFace.UP);
+                //TODO Remove this workaround when casting to Tree works again
+                if (blockState.getData() instanceof Tree) {
+                    Tree tree = (Tree) blockState.getData();
+                    tree.setDirection(BlockFace.UP);
+                }
 
                 switch (material) {
                     case LOG:
+                    case LOG_2:
                         if (canGetDoubleDrops()) {
                             Woodcutting.checkForDoubleDrop(blockState);
                         }
@@ -153,6 +158,7 @@ public class WoodcuttingManager extends SkillManager {
                         break;
 
                     case LEAVES:
+                    case LEAVES_2:
                         Misc.dropItems(blockState.getLocation(), block.getDrops());
                         break;
 
@@ -165,7 +171,6 @@ public class WoodcuttingManager extends SkillManager {
             blockState.update(true);
         }
 
-        applyXpGain(xp);
+        applyXpGain(xp, XPGainReason.PVE);
     }
-
 }

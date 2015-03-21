@@ -9,6 +9,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import com.gmail.nossr50.config.AdvancedConfig;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.ParticleEffectUtils;
@@ -19,7 +20,7 @@ public class BleedTimerTask extends BukkitRunnable {
 
     @Override
     public void run() {
-        for (Iterator<Entry<LivingEntity, Integer>> bleedIterator = bleedList.entrySet().iterator(); bleedIterator.hasNext();) {
+        for (Iterator<Entry<LivingEntity, Integer>> bleedIterator = bleedList.entrySet().iterator(); bleedIterator.hasNext(); ) {
             Entry<LivingEntity, Integer> entry = bleedIterator.next();
             LivingEntity entity = entry.getKey();
 
@@ -28,10 +29,10 @@ public class BleedTimerTask extends BukkitRunnable {
                 continue;
             }
 
-            int damage = 0;
+            double damage;
 
             if (entity instanceof Player) {
-                damage = 1;
+                damage = AdvancedConfig.getInstance().getBleedDamagePlayer();
                 Player player = (Player) entity;
 
                 if (!player.isOnline()) {
@@ -44,14 +45,14 @@ public class BleedTimerTask extends BukkitRunnable {
                     ParticleEffectUtils.playBleedEffect(entity);
                 }
 
-                entry.setValue(entry.getValue() - damage);
+                entry.setValue(entry.getValue() - 1);
 
                 if (entry.getValue() <= 0) {
                     player.sendMessage(LocaleLoader.getString("Swords.Combat.Bleeding.Stopped"));
                 }
             }
             else {
-                damage = 2;
+                damage = AdvancedConfig.getInstance().getBleedDamageMobs();
 
                 // Anticipate the entity's death to prevent CME because of our EntityDeathEvent listener
                 if (entity.getHealth() - damage > 0) {
@@ -106,5 +107,9 @@ public class BleedTimerTask extends BukkitRunnable {
         else {
             bleedList.put(entity, Math.min(newTicks, MAX_BLEED_TICKS));
         }
+    }
+
+    public static boolean isBleeding(LivingEntity entity) {
+        return bleedList.containsKey(entity);
     }
 }

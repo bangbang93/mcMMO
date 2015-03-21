@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.bukkit.Material;
+import org.bukkit.TreeSpecies;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.inventory.ItemStack;
@@ -16,7 +17,6 @@ import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.Misc;
-import com.gmail.nossr50.util.ModUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
 public final class Woodcutting {
@@ -52,32 +52,23 @@ public final class Woodcutting {
                 break;
         }
 
-        if (ModUtils.isCustomLogBlock(blockState)) {
-            return ModUtils.getCustomBlock(blockState).getXpGain();
+        if (mcMMO.getModManager().isCustomLog(blockState)) {
+            return mcMMO.getModManager().getBlock(blockState).getXpGain();
         }
 
-        switch (((Tree) blockState.getData()).getSpecies()) {
-            case GENERIC:
-                return ExperienceConfig.getInstance().getWoodcuttingXPOak();
-
-            case REDWOOD:
-                return ExperienceConfig.getInstance().getWoodcuttingXPSpruce();
-
-            case BIRCH:
-                return ExperienceConfig.getInstance().getWoodcuttingXPBirch();
-
-            case JUNGLE:
-                int xp = ExperienceConfig.getInstance().getWoodcuttingXPJungle();
-
-                if (experienceGainMethod == ExperienceGainMethod.TREE_FELLER) {
-                    xp *= 0.5;
-                }
-
-                return xp;
-
-            default:
-                return 0;
+        //TODO Remove this workaround when casting to Tree works again
+        TreeSpecies species = TreeSpecies.GENERIC;
+        if (blockState.getData() instanceof Tree) {
+            species = ((Tree) blockState.getData()).getSpecies();
         }
+
+        int xp = ExperienceConfig.getInstance().getWoodcuttingTreeXP(species);
+
+        if (species == TreeSpecies.JUNGLE && experienceGainMethod == ExperienceGainMethod.TREE_FELLER) {
+            xp *= 0.5;
+        }
+
+        return xp;
     }
 
     /**
@@ -86,37 +77,18 @@ public final class Woodcutting {
      * @param blockState Block being broken
      */
     protected static void checkForDoubleDrop(BlockState blockState) {
-        if (ModUtils.isCustomLogBlock(blockState) && ModUtils.getCustomBlock(blockState).isDoubleDropEnabled()) {
+        if (mcMMO.getModManager().isCustomLog(blockState) && mcMMO.getModManager().getBlock(blockState).isDoubleDropEnabled()) {
             Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
         }
         else {
-            switch (((Tree) blockState.getData()).getSpecies()) {
-                case GENERIC:
-                    if (Config.getInstance().getOakDoubleDropsEnabled()) {
-                        Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
-                    }
-                    return;
+            //TODO Remove this workaround when casting to Tree works again
+            TreeSpecies species = TreeSpecies.GENERIC;
+            if (blockState.getData() instanceof Tree) {
+                species = ((Tree) blockState.getData()).getSpecies();
+            }
 
-                case REDWOOD:
-                    if (Config.getInstance().getSpruceDoubleDropsEnabled()) {
-                        Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
-                    }
-                    return;
-
-                case BIRCH:
-                    if (Config.getInstance().getBirchDoubleDropsEnabled()) {
-                        Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
-                    }
-                    return;
-
-                case JUNGLE:
-                    if (Config.getInstance().getJungleDoubleDropsEnabled()) {
-                        Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
-                    }
-                    return;
-
-                default:
-                    return;
+            if (Config.getInstance().getWoodcuttingDoubleDropsEnabled(species)) {
+                Misc.dropItems(blockState.getLocation(), blockState.getBlock().getDrops());
             }
         }
     }

@@ -7,7 +7,92 @@ Key:
   ! Change
   - Removal
 
-Version 1.4.08-dev
+Version 1.5.03-dev
+
+
+Version 1.5.02
+ + Added option to config.yml for Chimaera Wings to stop using bed spawn points
+ + Added option to config.yml to let non-tools in hand count as unarmed
+ + Added option to experience.yml to control XP gained by killing bred animals
+ + Added support for 1.8 mobs and features
+ = Fixed bug where no Mining XP was granted when Flux Mining was successful
+ = Fixed bug with UUID conversions in Flatfile
+ = Fixed a couple Dupe bugs that were introduced recently
+ = Fixed bug where MobHealthbarTypes were not saved between server restarts
+ ! Changed Flux Mining mechanics. In order to use the ability, you need to infuse a pickaxe with furnace powers first.
+ ! Scoreboard tips are only shown a couple of times to the player, instead of once per login session
+ ! Changed Archery distance multiplier to be configurable
+ ! Archery distance XP bonus cannot exceed indefinitely anymore
+
+Version 1.5.01
+ + Added new child skill; Salvage
+ + Added UUID support!
+ + Added SQL connection pooling and async loading!
+ + Added the long awaited Diminished Returns feature
+ + Added new feature to Herbalism. Instantly-regrown crops are protected from being broken for 1 second
+ + Added option to config.yml to show the /mcstats scoreboard automatically after logging in
+ + Added option to config.yml for Alchemy. Skills.Alchemy.Prevent_Hopper_Transfer_Bottles
+ + Added option to config.yml for Scoreboards, display "Ability" instead of ability names on the scoreboards
+ + Added options to experience.yml for Dirt and Sand variations
+ + Added support for `MATERIAL|data` format in treasures.yml
+ + Added API to experience events to get XP gain reason
+ + Added API to check if an entity is bleeding
+ + Added API to ExperienceAPI to get the amount of XP needed for a level
+ + Added API class SkillAPI used to get a list of valid skill names
+ + Added API events for hardcore features, McMMOPlayerPreDeathPenaltyEvent, McMMOPlayerStatLossEvent and McMMOPlayerVampirismEvent
+ + Added API to ExperienceAPI to specify if XP can be shared
+ + Added options to tools.yml and armor.yml config files to set a pretty repair material name
+ + Added full support for repairables in tools.yml and armor.yml config files
+ + Added magical mod config file import command, for Cauldron 1.7+. Check wiki for usage
+ + Added particle effects and sounds to "Call of the Wild" (Taming)
+ + Added summon length to "Call of the Wild". Summons will now commit suicide after their lifespan expires
+ + Added feature which makes tamed wolves attack a target shot by the owner
+ = Fixed bug where pistons would mess with the block tracking
+ = Fixed bug where the Updater was running on the main thread.
+ = Fixed bug when players would use /ptp without being in a party
+ = Fixed bug where player didn't have a mcMMOPlayer object in AsyncPlayerChatEvent
+ = Fixed bug where dodge would check the wrong player skill level
+ = Fixed bug which causes /party teleport to stop working
+ = Fixed bug where SaveTimerTask would produce an IndexOutOfBoundsException
+ = Fixed bug where Alchemy would not fire BrewEvents
+ = Fixed bug with setting custom names and lore in treasures config
+ = Fixed bug which would cause a NullPointerException with getFlowerAndGrassXp()
+ = Fixed bug which could cause and SQLException regarding the connection property 'maxReconnects'.
+ = Fixed bug where falling blocks were incorrectly tracked
+ = Fixed bug where items would get deleted when in Berserk with a full inventory
+ = Fixed bug where the console would not correctly show party chat colors
+ = Fixed bug where party chat was using non thread safe methods
+ = Fixed bug where Blast Mining unlock levels could be to high in certain occasions
+ = Fixed bug where Blast Minings ability "Demolition Expert" would not work
+ = Fixed bug where Repair_Material_Quantity wasn't read in mod config files
+ ! Changed SecondaryAbilityEvent to implement Cancellable and it now gets fired for damage related secondary abilities
+ ! Changed the way mcMMO handles bonus damage, updated for the new damage event API
+ ! Changed player data saving. Save tasks are now asynchronous
+ ! Vanished players no longer get hit by AoE effects
+ ! Changed Alchemy config option 'Prevent_Hopper_Transfer' renamed to 'Prevent_Hopper_Transfer_Ingredients'
+ ! Changed Alchemy XP distribution. XP is granted based on the stage of the potion.
+ ! Changed behavior of the Blast Mining ability "Demolition Expert"; now only decreases damage for the ability user
+ ! Updated for new getOnlinePlayers() behavior
+ ! Updated for new blocks and entities
+ ! Changed McMMOPlayerDeathPenaltyEvent to get fired after hardcore penalty calculations, use McMMOPlayerPreDeathPenaltyEvent for old behavior
+ ! Moved Refresh_Chunks setting from hidden.yml to config.yml
+ - Removed salvage ability from Repair, salvage has it's own (child) skill now
+
+Version 1.5.00
+ + Added Podzol & Red Sand to Excavation
+ + Added Hardened Clay, Stained Clay, and Packed Ice to Mining blocks
+ + Added Acacia and Dark Oak to Woodcutting blocks
+ + Added Salmon, Clownfish, and Pufferfish to Fishing XP
+ + Added new flowers and grasses to Herbalism XP
+ + Added option to config.yml which allows players to always catch fish, even when a treasure is found
+ + Added option to config.yml to override vanilla Minecraft treasures
+ ! Fishing XP now depends on the type of fish.
+ ! Woodcutting XP in experience.yml and Woodcutting double drops in config.yml now use the tree species names. Oak is now Generic, and Spruce is now Redwood.
+ ! Red_Rose was replaced by Poppy, and so the key in experience.yml has been updated accordingly.
+ - Removed deprecated permission nodes
+ - Removed "Treasure found!" message
+
+Version 1.4.08
  + Added a new skill; Alchemy. Special thanks to EasyMFnE for creating this!
  + Added SecondaryAbilityType enum, and new SecondaryAbilityWeightedActivationCheckEvent, fired when a secondary ability checkes its activation chances
  + Added the possibility to gain experience when using Fishing "Shake"
@@ -20,6 +105,14 @@ Version 1.4.08-dev
  + Added new experience bonus perk 'mcmmo.perks.xp.10percentboost.<skillname>' multiplies incoming XP by 1.1
  + Added new experience bonus perk 'mcmmo.perks.xp.customboost.<skillname>' multiplies incoming XP by the boost amount defined in the experience config
  + Added Ender Dragon, Wither, and Witch to combat experience multipliers - they do not give XP by default
+ + Added support for multiple mod config files, naming can be done as either armor.<modname>.yml or <modname>.armor.yml
+ + Added config options to configure the items used in "Call of the Wild"
+ + Added config option to configure the database command cooldown
+ = Fixed bug where healthbars wouldn't display if skills were disabled
+ = Fixed bug with "Call of the Wild" entities despawning
+ = Fixed bug with updating (very) old user data.
+ = Fixed bug with checking maximum durability of mod items.
+ = Fixed exploit involving Call of The Wild.
  = Fixed bug where LeafBlower permissions were ignored
  = Fixed bug with toggle commands not properly displaying the success message.
  = Fixed IllegalArgumentException caused by an empty Fishing treasure category
@@ -33,8 +126,12 @@ Version 1.4.08-dev
  = Fixed bug where party chat broke if the display name contained special characters
  = Fixed bug where `/addlevels all` and `/skillreset all` didn't work
  = Fixed bug which made it possible to gain XP by taming the same horse multiple times, if a player "untamed" that horse
+ = Fixed bug where some horses summoned with "Call of the Wild" were unable to jump
  = Fixed bug where the /ptp request expiration time was checked wrongly - preventing players from using the command
  = Fixed bug where Hylian Luck was broken
+ = Fixed bug where Snow would never drop treasures
+ = Fixed issues with commands giving away vanished players.
+ = Fixed bug where the Repair lucky perk would increase the Arcane Forging downgrade chance, instead of decreasing it
  ! Changed party system. Parties now have XP and Levels. Party features such as party teleport and party chat have to be unlocked before they can be used by the party members
  ! Changed appearance of party member list. Gold = party leader, White = online, Gray = offline, Italic = not nearby
  ! Updated localization files
@@ -44,6 +141,8 @@ Version 1.4.08-dev
  ! Changed /ptp config setting, Commands.ptp.Confirm_Required is now Commands.ptp.Accept.Required
  ! Changed config validation for UnlockLevels, they can now also be 0
  ! Changed config validation for Rank_Levels, successive Ranks can now be less than or equal to each other
+ ! Changed default amount of XP gained from mining Quartz Ore. From 250 to 100 XP.
+ ! Changed Acrobatics config setting, Skills.Acrobatics.Prevent_XP_After_Teleport is now Skills.Acrobatics.XP_After_Teleport_Cooldown
  - Removed /stats alias for /mcstats
 
 Version 1.4.07

@@ -1,8 +1,8 @@
 package com.gmail.nossr50.runnables.skills;
 
-import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.BrewingStand;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -19,48 +19,47 @@ import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
 
 public class AlchemyBrewTask extends BukkitRunnable {
-    private final double DEFAULT_BREW_SPEED = 1.0;
-    private final int    DEFAULT_BREW_TICKS = 400;
+    private static double DEFAULT_BREW_SPEED = 1.0;
+    private static int    DEFAULT_BREW_TICKS = 400;
 
-    private Block brewingStand;
+    private BlockState brewingStand;
+    private Location location;
     private double brewSpeed;
     private double brewTimer;
     private Player player;
 
-    public AlchemyBrewTask(Block brewingStand, Player player) {
+    public AlchemyBrewTask(BlockState brewingStand, Player player) {
         this.brewingStand = brewingStand;
+        this.location = brewingStand.getLocation();
         this.player = player;
 
         brewSpeed = DEFAULT_BREW_SPEED;
         brewTimer = DEFAULT_BREW_TICKS;
 
         if (player != null && !Misc.isNPCEntity(player) && Permissions.secondaryAbilityEnabled(player, SecondaryAbility.CATALYSIS)) {
-            double catalysis = UserManager.getPlayer(player).getAlchemyManager().getBrewSpeed();
-
-            if (Permissions.lucky(player, SkillType.ALCHEMY)) {
-                catalysis = UserManager.getPlayer(player).getAlchemyManager().getBrewSpeedLucky();
-            }
+            double catalysis = UserManager.getPlayer(player).getAlchemyManager().calculateBrewSpeed(Permissions.lucky(player, SkillType.ALCHEMY));
 
             McMMOPlayerCatalysisEvent event = new McMMOPlayerCatalysisEvent(player, catalysis);
-            Bukkit.getPluginManager().callEvent(event);
+            mcMMO.p.getServer().getPluginManager().callEvent(event);
+
             if (!event.isCancelled()) {
                 brewSpeed = catalysis;
             }
         }
 
-        if (Alchemy.brewingStandMap.containsKey(brewingStand)) {
-            Alchemy.brewingStandMap.get(brewingStand).cancel();
+        if (Alchemy.brewingStandMap.containsKey(location)) {
+            Alchemy.brewingStandMap.get(location).cancel();
         }
 
-        Alchemy.brewingStandMap.put(brewingStand, this);
+        Alchemy.brewingStandMap.put(location, this);
         this.runTaskTimer(mcMMO.p, 1, 1);
     }
 
     @Override
     public void run() {
-        if (player == null || !player.isValid() || brewingStand.getType() != Material.BREWING_STAND) {
-            if (Alchemy.brewingStandMap.containsKey(brewingStand)) {
-                Alchemy.brewingStandMap.remove(brewingStand);
+        if (player == null || !player.isValid() || brewingStand == null || brewingStand.getType() != Material.BREWING_STAND) {
+            if (Alchemy.brewingStandMap.containsKey(location)) {
+                Alchemy.brewingStandMap.remove(location);
             }
 
             this.cancel();
@@ -76,32 +75,32 @@ public class AlchemyBrewTask extends BukkitRunnable {
             finish();
         }
         else {
-            ((BrewingStand) brewingStand.getState()).setBrewingTime((int) brewTimer);
+            ((BrewingStand) brewingStand).setBrewingTime((int) brewTimer);
         }
     }
 
     private void finish() {
         McMMOPlayerBrewEvent event = new McMMOPlayerBrewEvent(player, brewingStand);
-        Bukkit.getPluginManager().callEvent(event);
+        mcMMO.p.getServer().getPluginManager().callEvent(event);
 
         if (!event.isCancelled()) {
             AlchemyPotionBrewer.finishBrewing(brewingStand, player, false);
         }
 
-        Alchemy.brewingStandMap.remove(brewingStand);
+        Alchemy.brewingStandMap.remove(location);
     }
 
     public void finishImmediately() {
         this.cancel();
 
         AlchemyPotionBrewer.finishBrewing(brewingStand, player, true);
-        Alchemy.brewingStandMap.remove(brewingStand);
+        Alchemy.brewingStandMap.remove(location);
     }
 
     public void cancelBrew() {
         this.cancel();
 
-        ((BrewingStand) brewingStand.getState()).setBrewingTime(-1);
-        Alchemy.brewingStandMap.remove(brewingStand);
+        ((BrewingStand) brewingStand).setBrewingTime(-1);
+        Alchemy.brewingStandMap.remove(location);
     }
 }

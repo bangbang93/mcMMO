@@ -1,9 +1,11 @@
 package com.gmail.nossr50.skills.alchemy;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import org.bukkit.block.Block;
+import org.bukkit.Location;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -44,36 +46,30 @@ public final class Alchemy {
         }
     }
 
+    public static final int INGREDIENT_SLOT = 3;
+
     public static int    catalysisUnlockLevel   = AdvancedConfig.getInstance().getCatalysisUnlockLevel();
     public static int    catalysisMaxBonusLevel = AdvancedConfig.getInstance().getCatalysisMaxBonusLevel();
     public static double catalysisMinSpeed      = AdvancedConfig.getInstance().getCatalysisMinSpeed();
     public static double catalysisMaxSpeed      = AdvancedConfig.getInstance().getCatalysisMaxSpeed();
 
-    public static Map<Block, AlchemyBrewTask> brewingStandMap = new HashMap<Block, AlchemyBrewTask>();
+    public static Map<Location, AlchemyBrewTask> brewingStandMap = new HashMap<Location, AlchemyBrewTask>();
 
     private Alchemy() {}
-
-    /**
-     * Calculate base brewing speed, given a skill level and ignoring all perks.
-     *
-     * @param skillLevel Skill level used for calculation.
-     *
-     * @return Base brewing speed for the level.
-     */
-    public static double calculateBrewSpeed(int skillLevel) {
-        if (skillLevel < catalysisUnlockLevel) {
-            return catalysisMinSpeed;
-        }
-
-        return Math.min(catalysisMaxSpeed, catalysisMinSpeed + (catalysisMaxSpeed - catalysisMinSpeed) * (skillLevel - catalysisUnlockLevel) / (catalysisMaxBonusLevel - catalysisUnlockLevel));
-    }
 
     /**
      * Finish all active brews.  Used upon Disable to prevent vanilla potions from being brewed upon next Enable.
      */
     public static void finishAllBrews() {
         mcMMO.p.debug("Completing " + brewingStandMap.size() + " unfinished Alchemy brews.");
+
+        List<AlchemyBrewTask> toFinish = new ArrayList<AlchemyBrewTask>();
+
         for (AlchemyBrewTask alchemyBrewTask : brewingStandMap.values()) {
+            toFinish.add(alchemyBrewTask);
+        }
+
+        for (AlchemyBrewTask alchemyBrewTask : toFinish) {
             alchemyBrewTask.finishImmediately();
         }
     }

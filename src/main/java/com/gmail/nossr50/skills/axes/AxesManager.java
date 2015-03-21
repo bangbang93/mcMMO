@@ -1,20 +1,20 @@
 package com.gmail.nossr50.skills.axes;
 
+import java.util.Map;
+
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityDamageEvent.DamageModifier;
 import org.bukkit.inventory.ItemStack;
 
-import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.datatypes.skills.ToolType;
-import com.gmail.nossr50.events.skills.secondaryabilities.SecondaryAbilityWeightedActivationCheckEvent;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.ItemUtils;
-import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
 import com.gmail.nossr50.util.skills.CombatUtils;
@@ -52,13 +52,13 @@ public class AxesManager extends SkillManager {
 
     /**
      * Handle the effects of the Axe Mastery ability
-     *
-     * @param target The {@link LivingEntity} being affected by the ability
      */
-    public double axeMastery(LivingEntity target) {
-        double axeBonus = Math.min(getSkillLevel() / (Axes.axeMasteryMaxBonusLevel / Axes.axeMasteryMaxBonus), Axes.axeMasteryMaxBonus);
+    public double axeMastery() {
+        if (!SkillUtils.activationSuccessful(SecondaryAbility.AXE_MASTERY, getPlayer())) {
+            return 0;
+        }
 
-        return CombatUtils.callFakeDamageEvent(getPlayer(), target, axeBonus);
+        return Math.min(getSkillLevel() / (Axes.axeMasteryMaxBonusLevel / Axes.axeMasteryMaxBonus), Axes.axeMasteryMaxBonus);
     }
 
     /**
@@ -74,10 +74,16 @@ public class AxesManager extends SkillManager {
 
         Player player = getPlayer();
 
-        player.sendMessage(LocaleLoader.getString("Axes.Combat.CriticalHit"));
+        if (mcMMOPlayer.useChatNotifications()) {
+            player.sendMessage(LocaleLoader.getString("Axes.Combat.CriticalHit"));
+        }
 
         if (target instanceof Player) {
-            ((Player) target).sendMessage(LocaleLoader.getString("Axes.Combat.CritStruck"));
+            Player defender = (Player) target;
+
+            if (UserManager.getPlayer(defender).useChatNotifications()) {
+                defender.sendMessage(LocaleLoader.getString("Axes.Combat.CritStruck"));
+            }
 
             damage = (damage * Axes.criticalHitPVPModifier) - damage;
         }
@@ -85,7 +91,7 @@ public class AxesManager extends SkillManager {
             damage = (damage * Axes.criticalHitPVEModifier) - damage;
         }
 
-        return CombatUtils.callFakeDamageEvent(player, target, damage);
+        return damage;
     }
 
     /**
@@ -98,10 +104,7 @@ public class AxesManager extends SkillManager {
 
         for (ItemStack armor : target.getEquipment().getArmorContents()) {
             if (ItemUtils.isArmor(armor)) {
-                double chance = Axes.impactChance / activationChance;
-                SecondaryAbilityWeightedActivationCheckEvent event = new SecondaryAbilityWeightedActivationCheckEvent(getPlayer(), SecondaryAbility.ARMOR_IMPACT, chance);
-                mcMMO.p.getServer().getPluginManager().callEvent(event);
-                if ((event.getChance() * activationChance) > Misc.getRandom().nextInt(activationChance)) {
+                if (SkillUtils.activationSuccessful(SecondaryAbility.ARMOR_IMPACT, getPlayer(), Axes.impactChance, activationChance)) {
                     SkillUtils.handleDurabilityChange(armor, durabilityDamage, Axes.impactMaxDurabilityModifier);
                 }
             }
@@ -114,10 +117,7 @@ public class AxesManager extends SkillManager {
      * @param target The {@link LivingEntity} being affected by the ability
      */
     public double greaterImpact(LivingEntity target) {
-        double chance = Axes.greaterImpactChance / activationChance;
-        SecondaryAbilityWeightedActivationCheckEvent event = new SecondaryAbilityWeightedActivationCheckEvent(getPlayer(), SecondaryAbility.GREATER_IMPACT, chance);
-        mcMMO.p.getServer().getPluginManager().callEvent(event);
-        if ((event.getChance() * activationChance) <= Misc.getRandom().nextInt(activationChance)) {
+        if (!SkillUtils.activationSuccessful(SecondaryAbility.GREATER_IMPACT, getPlayer(), Axes.greaterImpactChance, activationChance)) {
             return 0;
         }
 
@@ -138,7 +138,7 @@ public class AxesManager extends SkillManager {
             }
         }
 
-        return CombatUtils.callFakeDamageEvent(player, target, Axes.greaterImpactBonusDamage);
+        return Axes.greaterImpactBonusDamage;
     }
 
     /**
@@ -147,7 +147,7 @@ public class AxesManager extends SkillManager {
      * @param target The {@link LivingEntity} being affected by the ability
      * @param damage The amount of damage initially dealt by the event
      */
-    public void skullSplitterCheck(LivingEntity target, double damage) {
-        CombatUtils.applyAbilityAoE(getPlayer(), target, damage / Axes.skullSplitterModifier, skill);
+    public void skullSplitterCheck(LivingEntity target, double damage, Map<DamageModifier, Double> modifiers) {
+        CombatUtils.applyAbilityAoE(getPlayer(), target, damage / Axes.skullSplitterModifier, modifiers, skill);
     }
 }

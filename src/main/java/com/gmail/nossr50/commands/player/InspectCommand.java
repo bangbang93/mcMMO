@@ -2,7 +2,6 @@ package com.gmail.nossr50.commands.player;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -29,11 +28,15 @@ public class InspectCommand implements TabExecutor {
         switch (args.length) {
             case 1:
                 String playerName = CommandUtils.getMatchedPlayerName(args[0]);
-                McMMOPlayer mcMMOPlayer = UserManager.getPlayer(playerName, true);
+                McMMOPlayer mcMMOPlayer = UserManager.getOfflinePlayer(playerName);
 
                 // If the mcMMOPlayer doesn't exist, create a temporary profile and check if it's present in the database. If it's not, abort the process.
                 if (mcMMOPlayer == null) {
                     PlayerProfile profile = mcMMO.getDatabaseManager().loadPlayerProfile(playerName, false); // Temporary Profile
+
+                    if (!CommandUtils.isLoaded(sender, profile)) {
+                        return true;
+                    }
 
                     if (CommandUtils.inspectOffline(sender, profile, Permissions.inspectOffline(sender))) {
                         return true;
@@ -104,7 +107,7 @@ public class InspectCommand implements TabExecutor {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         switch (args.length) {
             case 1:
-                Set<String> playerNames = UserManager.getPlayerNames();
+                List<String> playerNames = CommandUtils.getOnlinePlayerNames(sender);
                 return StringUtil.copyPartialMatches(args[0], playerNames, new ArrayList<String>(playerNames.size()));
             default:
                 return ImmutableList.of();
