@@ -1,10 +1,12 @@
 package com.gmail.nossr50.listeners;
 
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.AnimalTamer;
 import org.bukkit.entity.Arrow;
+import org.bukkit.entity.Enderman;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.FallingBlock;
 import org.bukkit.entity.LivingEntity;
@@ -34,6 +36,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.projectiles.ProjectileSource;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.AdvancedConfig;
@@ -42,15 +46,18 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.events.fake.FakeEntityDamageByEntityEvent;
 import com.gmail.nossr50.events.fake.FakeEntityDamageEvent;
+import com.gmail.nossr50.events.fake.FakeEntityTameEvent;
 import com.gmail.nossr50.party.PartyManager;
 import com.gmail.nossr50.runnables.skills.BleedTimerTask;
 import com.gmail.nossr50.skills.acrobatics.AcrobaticsManager;
 import com.gmail.nossr50.skills.archery.Archery;
 import com.gmail.nossr50.skills.fishing.Fishing;
 import com.gmail.nossr50.skills.herbalism.Herbalism;
+import com.gmail.nossr50.skills.mining.BlastMining;
 import com.gmail.nossr50.skills.mining.MiningManager;
 import com.gmail.nossr50.skills.taming.Taming;
 import com.gmail.nossr50.skills.taming.TamingManager;
+import com.gmail.nossr50.util.BlockUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
@@ -79,7 +86,7 @@ public class EntityListener implements Listener {
         }
 
         projectile.setMetadata(mcMMO.bowForceKey, new FixedMetadataValue(plugin, Math.min(event.getForce() * AdvancedConfig.getInstance().getForceMultiplier(), 1.0)));
-        projectile.setMetadata(mcMMO.arrowDistanceKey, new FixedMetadataValue(plugin, Archery.locationToString(projectile.getLocation())));
+        projectile.setMetadata(mcMMO.arrowDistanceKey, new FixedMetadataValue(plugin, projectile.getLocation()));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -91,7 +98,7 @@ public class EntityListener implements Listener {
         }
 
         projectile.setMetadata(mcMMO.bowForceKey, new FixedMetadataValue(plugin, 1.0));
-        projectile.setMetadata(mcMMO.arrowDistanceKey, new FixedMetadataValue(plugin, Archery.locationToString(projectile.getLocation())));
+        projectile.setMetadata(mcMMO.arrowDistanceKey, new FixedMetadataValue(plugin, projectile.getLocation()));
     }
 
     /**
@@ -101,21 +108,34 @@ public class EntityListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityChangeBlock(EntityChangeBlockEvent event) {
-        Entity entity = event.getEntity();
+        Block block = event.getBlock();
 
-        if (!(entity instanceof FallingBlock)) {
+        // When the event is fired for the falling block that changes back to a normal block
+        // event.getBlock().getType() returns AIR
+        if (!BlockUtils.shouldBeWatched(block.getState()) && block.getType() != Material.AIR) {
             return;
         }
 
-        Block block = event.getBlock();
-        boolean isTracked = entity.hasMetadata(mcMMO.entityMetadataKey);
+        Entity entity = event.getEntity();
 
-        if (mcMMO.getPlaceStore().isTrue(block) && !isTracked) {
-            mcMMO.getPlaceStore().setFalse(block);
-            entity.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
+        if (entity instanceof FallingBlock || entity instanceof Enderman) {
+            boolean isTracked = entity.hasMetadata(mcMMO.entityMetadataKey);
+
+            if (mcMMO.getPlaceStore().isTrue(block) && !isTracked) {
+                mcMMO.getPlaceStore().setFalse(block);
+                entity.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
+            }
+            else if (isTracked) {
+                mcMMO.getPlaceStore().setTrue(block);
+            }
         }
-        else if (isTracked) {
-            mcMMO.getPlaceStore().setTrue(block);
+        else if ((block.getType() == Material.REDSTONE_ORE || block.getType() == Material.GLOWING_REDSTONE_ORE) && (event.getTo() == Material.REDSTONE_ORE || event.getTo() == Material.GLOWING_REDSTONE_ORE)) {
+            return;
+        }
+        else {
+            if (mcMMO.getPlaceStore().isTrue(block)) {
+                mcMMO.getPlaceStore().setFalse(block);
+            }
         }
     }
 
@@ -130,7 +150,7 @@ public class EntityListener implements Listener {
             return;
         }
 
-        double damage = event.getDamage();
+        double damage = event.getFinalDamage();
 
         if (damage <= 0) {
             return;
@@ -160,7 +180,11 @@ public class EntityListener implements Listener {
         }
 
         if (attacker instanceof Projectile) {
-            attacker = ((Projectile) attacker).getShooter();
+            ProjectileSource projectileSource = ((Projectile) attacker).getShooter();
+
+            if (projectileSource instanceof LivingEntity) {
+                attacker = (LivingEntity) projectileSource;
+            }
         }
         else if (attacker instanceof Tameable) {
             AnimalTamer animalTamer = ((Tameable) attacker).getOwner();
@@ -169,10 +193,19 @@ public class EntityListener implements Listener {
                 attacker = (Entity) animalTamer;
             }
         }
+        else if (attacker instanceof TNTPrimed && defender instanceof Player) {
+            if (BlastMining.processBlastMiningExplosion(event, (TNTPrimed) attacker, (Player) defender)) {
+                return;
+            }
+        }
 
         if (defender instanceof Player && attacker instanceof Player) {
             Player defendingPlayer = (Player) defender;
             Player attackingPlayer = (Player) attacker;
+
+            if (!UserManager.hasPlayerDataKey(defendingPlayer) || !UserManager.hasPlayerDataKey(attackingPlayer)) {
+                return;
+            }
 
             // We want to make sure we're not gaining XP or applying abilities when we hit ourselves
             if (defendingPlayer.equals(attackingPlayer)) {
@@ -186,6 +219,7 @@ public class EntityListener implements Listener {
         }
 
         CombatUtils.processCombatAttack(event, attacker, target);
+        CombatUtils.handleHealthbars(attacker, target, event.getFinalDamage());
     }
 
     /**
@@ -199,7 +233,7 @@ public class EntityListener implements Listener {
             return;
         }
 
-        double damage = event.getDamage();
+        double damage = event.getFinalDamage();
 
         if (damage <= 0) {
             return;
@@ -226,6 +260,11 @@ public class EntityListener implements Listener {
 
         if (livingEntity instanceof Player) {
             Player player = (Player) entity;
+
+            if (!UserManager.hasPlayerDataKey(player)) {
+                return;
+            }
+
             McMMOPlayer mcMMOPlayer = UserManager.getPlayer(player);
 
             /* Check for invincibility */
@@ -236,7 +275,7 @@ public class EntityListener implements Listener {
 
             switch (cause) {
                 case FALL:
-                    if (Config.getInstance().getPreventXPAfterTeleport() && SkillUtils.calculateTimeLeft((long) mcMMOPlayer.getTeleportATS() * Misc.TIME_CONVERSION_FACTOR, 5, player) > 0) {
+                    if (!SkillUtils.cooldownExpired((long) mcMMOPlayer.getTeleportATS(), Config.getInstance().getXPAfterTeleportCooldown())) {
                         return;
                     }
 
@@ -245,20 +284,7 @@ public class EntityListener implements Listener {
                     if (acrobaticsManager.canRoll()) {
                         event.setDamage(acrobaticsManager.rollCheck(event.getDamage()));
 
-                        if (event.getDamage() == 0) {
-                            event.setCancelled(true);
-                            return;
-                        }
-                    }
-                    break;
-
-                case BLOCK_EXPLOSION:
-                    MiningManager miningManager = mcMMOPlayer.getMiningManager();
-
-                    if (miningManager.canUseDemolitionsExpertise()) {
-                        event.setDamage(miningManager.processDemolitionsExpertise(event.getDamage()));
-
-                        if (event.getDamage() == 0) {
+                        if (event.getFinalDamage() == 0) {
                             event.setCancelled(true);
                             return;
                         }
@@ -269,7 +295,7 @@ public class EntityListener implements Listener {
                     break;
             }
 
-            if (event.getDamage() >= 1) {
+            if (event.getFinalDamage() >= 1) {
                 mcMMOPlayer.actualizeRecentlyHurt();
             }
         }
@@ -303,7 +329,7 @@ public class EntityListener implements Listener {
                         if (tamingManager.canUseThickFur()) {
                             event.setDamage(Taming.processThickFur(wolf, event.getDamage()));
 
-                            if (event.getDamage() == 0) {
+                            if (event.getFinalDamage() == 0) {
                                 event.setCancelled(true);
                             }
                         }
@@ -329,7 +355,7 @@ public class EntityListener implements Listener {
                         if (tamingManager.canUseShockProof()) {
                             event.setDamage(Taming.processShockProof(wolf, event.getDamage()));
 
-                            if (event.getDamage() == 0) {
+                            if (event.getFinalDamage() == 0) {
                                 event.setCancelled(true);
                             }
                         }
@@ -390,17 +416,22 @@ public class EntityListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
+        LivingEntity entity = event.getEntity();
+
         switch (event.getSpawnReason()) {
             case SPAWNER:
             case SPAWNER_EGG:
-                LivingEntity entity = event.getEntity();
-                Entity passenger = entity.getPassenger();
-
                 entity.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
+
+                Entity passenger = entity.getPassenger();
 
                 if (passenger != null) {
                     passenger.setMetadata(mcMMO.entityMetadataKey, mcMMO.metadataValue);
                 }
+                return;
+
+            case BREEDING:
+                entity.setMetadata(mcMMO.bredMetadataKey, mcMMO.metadataValue);
                 return;
 
             default:
@@ -424,7 +455,7 @@ public class EntityListener implements Listener {
         // We can make this assumption because we (should) be the only ones using this exact metadata
         Player player = plugin.getServer().getPlayerExact(entity.getMetadata(mcMMO.tntMetadataKey).get(0).asString());
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 
@@ -451,7 +482,7 @@ public class EntityListener implements Listener {
         // We can make this assumption because we (should) be the only ones using this exact metadata
         Player player = plugin.getServer().getPlayerExact(entity.getMetadata(mcMMO.tntMetadataKey).get(0).asString());
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 
@@ -494,7 +525,7 @@ public class EntityListener implements Listener {
 
         Player player = (Player) entity;
 
-        if (Misc.isNPCEntity(player)) {
+        if (!UserManager.hasPlayerDataKey(player)) {
             return;
         }
 
@@ -557,10 +588,14 @@ public class EntityListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityTame(EntityTameEvent event) {
+        if (event instanceof FakeEntityTameEvent) {
+            return;
+        }
+
         Player player = (Player) event.getOwner();
         LivingEntity entity = event.getEntity();
 
-        if (Misc.isNPCEntity(player) || Misc.isNPCEntity(entity) || entity.hasMetadata(mcMMO.entityMetadataKey)) {
+        if (!UserManager.hasPlayerDataKey(player) || Misc.isNPCEntity(entity) || entity.hasMetadata(mcMMO.entityMetadataKey)) {
             return;
         }
 
@@ -585,7 +620,7 @@ public class EntityListener implements Listener {
         Player player = (Player) target;
         Tameable tameable = (Tameable) entity;
 
-        if (!CombatUtils.isFriendlyPet(player, tameable)) {
+        if (!UserManager.hasPlayerDataKey(player) || !CombatUtils.isFriendlyPet(player, tameable)) {
             return;
         }
 
@@ -603,9 +638,8 @@ public class EntityListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPotionSplash(PotionSplashEvent event) {
-        for (PotionEffect effect : ((PotionMeta) event.getEntity().getItem().getItemMeta()).getCustomEffects()) {
-            // (effect.getType() != PotionEffectType.SATURATION) is seemingly broken, so we use deprecated method for now.
-            if (effect.getType().getId() != 23) {
+        for (PotionEffect effect : ((PotionMeta) event.getPotion().getItem().getItemMeta()).getCustomEffects()) {
+            if (!effect.getType().equals(PotionEffectType.SATURATION)) {
                 return;
             }
 

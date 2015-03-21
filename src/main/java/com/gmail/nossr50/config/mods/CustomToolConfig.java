@@ -11,53 +11,33 @@ import org.bukkit.inventory.ItemStack;
 
 import com.gmail.nossr50.config.ConfigLoader;
 import com.gmail.nossr50.datatypes.mods.CustomTool;
-import com.gmail.nossr50.skills.repair.Repair;
-import com.gmail.nossr50.skills.repair.repairables.RepairItemType;
-import com.gmail.nossr50.skills.repair.repairables.RepairMaterialType;
+import com.gmail.nossr50.datatypes.skills.ItemType;
+import com.gmail.nossr50.datatypes.skills.MaterialType;
 import com.gmail.nossr50.skills.repair.repairables.Repairable;
 import com.gmail.nossr50.skills.repair.repairables.RepairableFactory;
+import com.gmail.nossr50.util.skills.SkillUtils;
 
 public class CustomToolConfig extends ConfigLoader {
-    private static CustomToolConfig instance;
-
     private boolean needsUpdate = false;
 
-    private List<Repairable> repairables;
+    public List<Material> customAxes     = new ArrayList<Material>();
+    public List<Material> customBows     = new ArrayList<Material>();
+    public List<Material> customHoes     = new ArrayList<Material>();
+    public List<Material> customPickaxes = new ArrayList<Material>();
+    public List<Material> customShovels  = new ArrayList<Material>();
+    public List<Material> customSwords   = new ArrayList<Material>();
 
-    private List<Material> customAxes     = new ArrayList<Material>();
-    private List<Material> customBows     = new ArrayList<Material>();
-    private List<Material> customHoes     = new ArrayList<Material>();
-    private List<Material> customPickaxes = new ArrayList<Material>();
-    private List<Material> customShovels  = new ArrayList<Material>();
-    private List<Material> customSwords   = new ArrayList<Material>();
+    public HashMap<Material, CustomTool> customToolMap = new HashMap<Material, CustomTool>();
 
-    private HashMap<Material, CustomTool> customToolMap = new HashMap<Material, CustomTool>();
+    public List<Repairable> repairables = new ArrayList<Repairable>();
 
-    private CustomToolConfig() {
-        super("mods", "tools.yml");
+    protected CustomToolConfig(String fileName) {
+        super("mods", fileName);
         loadKeys();
-    }
-
-    public static CustomToolConfig getInstance() {
-        if (instance == null) {
-            instance = new CustomToolConfig();
-        }
-
-        return instance;
-    }
-
-    public List<Repairable> getLoadedRepairables() {
-        if (repairables == null) {
-            return new ArrayList<Repairable>();
-        }
-
-        return repairables;
     }
 
     @Override
     protected void loadKeys() {
-        repairables = new ArrayList<Repairable>();
-
         loadTool("Axes", customAxes);
         loadTool("Bows", customBows);
         loadTool("Hoes", customHoes);
@@ -100,18 +80,22 @@ public class CustomToolConfig extends ConfigLoader {
             boolean repairable = config.getBoolean(toolType + "." + toolName + ".Repairable");
             Material repairMaterial = Material.matchMaterial(config.getString(toolType + "." + toolName + ".Repair_Material", ""));
 
-            if (repairMaterial == null) {
+            if (repairable && (repairMaterial == null)) {
                 plugin.getLogger().warning("Incomplete repair information. This item will be unrepairable. - " + toolName);
                 repairable = false;
             }
 
             if (repairable) {
                 byte repairData = (byte) config.getInt(toolType + "." + toolName + ".Repair_Material_Data_Value", -1);
-                int repairQuantity = Repair.getRepairAndSalvageQuantities(new ItemStack(toolMaterial), repairMaterial, repairData);
+                int repairQuantity = SkillUtils.getRepairAndSalvageQuantities(new ItemStack(toolMaterial), repairMaterial, repairData);
 
                 if (repairQuantity == 0) {
-                    repairQuantity = config.getInt(toolType + "." + toolName + ".Repair_Material_Data_Quantity", 2);
+                    repairQuantity = config.getInt(toolType + "." + toolName + ".Repair_Material_Quantity", 2);
                 }
+
+                String repairItemName = config.getString(toolType + "." + toolName + ".Repair_Material_Pretty_Name");
+                int repairMinimumLevel = config.getInt(toolType + "." + toolName + ".Repair_MinimumLevel", 0);
+                double repairXpMultiplier = config.getDouble(toolType + "." + toolName + ".Repair_XpMultiplier", 1);
 
                 short durability = toolMaterial.getMaxDurability();
 
@@ -119,7 +103,7 @@ public class CustomToolConfig extends ConfigLoader {
                     durability = (short) config.getInt(toolType + "." + toolName + ".Durability", 60);
                 }
 
-                repairables.add(RepairableFactory.getRepairable(toolMaterial, repairMaterial, repairData, 0, repairQuantity, durability, RepairItemType.TOOL, RepairMaterialType.OTHER, 1.0));
+                repairables.add(RepairableFactory.getRepairable(toolMaterial, repairMaterial, repairData, repairItemName, repairMinimumLevel, repairQuantity, durability, ItemType.TOOL, MaterialType.OTHER, repairXpMultiplier));
             }
 
             double multiplier = config.getDouble(toolType + "." + toolName + ".XP_Modifier", 1.0);
@@ -131,37 +115,5 @@ public class CustomToolConfig extends ConfigLoader {
             materialList.add(toolMaterial);
             customToolMap.put(toolMaterial, tool);
         }
-    }
-
-    public boolean isCustomAxe(Material material) {
-        return customAxes.contains(material);
-    }
-
-    public boolean isCustomBow(Material material) {
-        return customBows.contains(material);
-    }
-
-    public boolean isCustomHoe(Material material) {
-        return customHoes.contains(material);
-    }
-
-    public boolean isCustomPickaxe(Material material) {
-        return customPickaxes.contains(material);
-    }
-
-    public boolean isCustomShovel(Material material) {
-        return customShovels.contains(material);
-    }
-
-    public boolean isCustomSword(Material material) {
-        return customSwords.contains(material);
-    }
-
-    public boolean isCustomTool(Material material) {
-        return customToolMap.containsKey(material);
-    }
-
-    public CustomTool getCustomTool(Material material) {
-        return customToolMap.get(material);
     }
 }

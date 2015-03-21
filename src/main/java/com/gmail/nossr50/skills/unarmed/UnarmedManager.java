@@ -19,10 +19,10 @@ import com.gmail.nossr50.datatypes.skills.ToolType;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.EventUtils;
+import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.player.UserManager;
-import com.gmail.nossr50.util.skills.CombatUtils;
 import com.gmail.nossr50.util.skills.SkillUtils;
 
 public class UnarmedManager extends SkillManager {
@@ -49,7 +49,7 @@ public class UnarmedManager extends SkillManager {
     public boolean canDeflect() {
         Player player = getPlayer();
 
-        return player.getItemInHand().getType() == Material.AIR && Permissions.secondaryAbilityEnabled(getPlayer(), SecondaryAbility.DEFLECT);
+        return ItemUtils.isUnarmed(player.getItemInHand()) && Permissions.secondaryAbilityEnabled(getPlayer(), SecondaryAbility.DEFLECT);
     }
 
     public boolean canUseBlockCracker() {
@@ -57,6 +57,10 @@ public class UnarmedManager extends SkillManager {
     }
 
     public boolean blockCrackerCheck(BlockState blockState) {
+        if (!SkillUtils.activationSuccessful(SecondaryAbility.BLOCK_CRACKER, getPlayer())) {
+            return false;
+        }
+
         MaterialData data = blockState.getData();
 
         switch (blockState.getType()) {
@@ -117,24 +121,23 @@ public class UnarmedManager extends SkillManager {
     /**
      * Handle the effects of the Berserk ability
      *
-     * @param target The {@link LivingEntity} being affected by the ability
      * @param damage The amount of damage initially dealt by the event
      */
-    public double berserkDamage(LivingEntity target, double damage) {
+    public double berserkDamage(double damage) {
         damage = (damage * Unarmed.berserkDamageModifier) - damage;
 
-        return CombatUtils.callFakeDamageEvent(getPlayer(), target, damage);
+        return damage;
     }
 
     /**
      * Handle the effects of the Iron Arm ability
-     *
-     * @param target The {@link LivingEntity} being affected by the ability
      */
-    public double ironArm(LivingEntity target) {
-        double unarmedBonus = Math.min(Unarmed.ironArmMinBonusDamage + (getSkillLevel() / Unarmed.ironArmIncreaseLevel), Unarmed.ironArmMaxBonusDamage);
+    public double ironArm() {
+        if (!SkillUtils.activationSuccessful(SecondaryAbility.IRON_ARM, getPlayer())) {
+            return 0;
+        }
 
-        return CombatUtils.callFakeDamageEvent(getPlayer(), target, unarmedBonus);
+        return Math.min(Unarmed.ironArmMinBonusDamage + (getSkillLevel() / Unarmed.ironArmIncreaseLevel), Unarmed.ironArmMaxBonusDamage);
     }
 
     /**

@@ -29,7 +29,7 @@ public class HashChunkManager implements ChunkManager {
     public synchronized void closeAll() {
         for (UUID uid : regionFiles.keySet()) {
             HashMap<Long, McMMOSimpleRegionFile> worldRegions = regionFiles.get(uid);
-            for (Iterator<McMMOSimpleRegionFile> worldRegionIterator = worldRegions.values().iterator(); worldRegionIterator.hasNext();) {
+            for (Iterator<McMMOSimpleRegionFile> worldRegionIterator = worldRegions.values().iterator(); worldRegionIterator.hasNext(); ) {
                 McMMOSimpleRegionFile rf = worldRegionIterator.next();
                 if (rf != null) {
                     rf.close();
@@ -233,17 +233,12 @@ public class HashChunkManager implements ChunkManager {
         for (String key : keys) {
             String[] info = key.split(",");
             if (worldName.equals(info[0])) {
-                int cx = 0;
-                int cz = 0;
-
                 try {
-                    cx = Integer.parseInt(info[1]);
-                    cz = Integer.parseInt(info[2]);
+                    saveChunk(Integer.parseInt(info[1]), Integer.parseInt(info[2]), world);
                 }
                 catch (Exception e) {
-                    continue;
+                    // Ignore
                 }
-                saveChunk(cx, cz, world);
             }
         }
     }
@@ -261,17 +256,12 @@ public class HashChunkManager implements ChunkManager {
         for (String key : keys) {
             String[] info = key.split(",");
             if (worldName.equals(info[0])) {
-                int cx = 0;
-                int cz = 0;
-
                 try {
-                    cx = Integer.parseInt(info[1]);
-                    cz = Integer.parseInt(info[2]);
+                    unloadChunk(Integer.parseInt(info[1]), Integer.parseInt(info[2]), world);
                 }
                 catch (Exception e) {
-                    continue;
+                    // Ignore
                 }
-                unloadChunk(cx, cz, world);
             }
         }
     }

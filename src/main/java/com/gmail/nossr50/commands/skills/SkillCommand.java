@@ -17,6 +17,7 @@ import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.child.FamilyTree;
+import com.gmail.nossr50.util.Motd;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.commands.CommandUtils;
@@ -44,6 +45,10 @@ public abstract class SkillCommand implements TabExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (CommandUtils.noConsoleUsage(sender)) {
+            return true;
+        }
+
+        if (!CommandUtils.hasPlayerDataKey(sender)) {
             return true;
         }
 
@@ -87,8 +92,7 @@ public abstract class SkillCommand implements TabExecutor {
                     player.sendMessage(LocaleLoader.getString("Skills.Header", LocaleLoader.getString("Effects.Effects")));
 
                     if (isLucky) {
-                        String perkPrefix = LocaleLoader.getString("MOTD.PerksPrefix");
-                        player.sendMessage(perkPrefix + LocaleLoader.getString("Effects.Template", LocaleLoader.getString("Perks.Lucky.Name"), LocaleLoader.getString("Perks.Lucky.Desc", skillName)));
+                        player.sendMessage(Motd.PERK_PREFIX + LocaleLoader.getString("Effects.Template", LocaleLoader.getString("Perks.Lucky.Name"), LocaleLoader.getString("Perks.Lucky.Desc", skillName)));
                     }
 
                     for (String message : effectMessages) {

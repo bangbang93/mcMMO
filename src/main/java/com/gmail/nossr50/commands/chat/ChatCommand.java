@@ -9,12 +9,12 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.bukkit.util.StringUtil;
 
-import com.gmail.nossr50.config.Config;
-import com.gmail.nossr50.datatypes.party.PartyFeature;
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.chat.ChatManager;
 import com.gmail.nossr50.chat.ChatManagerFactory;
+import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.chat.ChatMode;
+import com.gmail.nossr50.datatypes.party.PartyFeature;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.util.commands.CommandUtils;
@@ -41,6 +41,10 @@ public abstract class ChatCommand implements TabExecutor {
                     return true;
                 }
 
+                if (!CommandUtils.hasPlayerDataKey(sender)) {
+                    return true;
+                }
+
                 mcMMOPlayer = UserManager.getPlayer(sender.getName());
 
                 if (mcMMOPlayer.isChatEnabled(chatMode)) {
@@ -53,6 +57,10 @@ public abstract class ChatCommand implements TabExecutor {
                 return true;
 
             case 1:
+                if (!CommandUtils.hasPlayerDataKey(sender)) {
+                    return true;
+                }
+
                 if (CommandUtils.shouldEnableToggle(args[0])) {
                     if (CommandUtils.noConsoleUsage(sender)) {
                         return true;

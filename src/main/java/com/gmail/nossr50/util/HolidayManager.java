@@ -10,8 +10,10 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.bukkit.ChatColor;
@@ -19,24 +21,94 @@ import org.bukkit.Color;
 import org.bukkit.DyeColor;
 import org.bukkit.FireworkEffect;
 import org.bukkit.FireworkEffect.Type;
+import org.bukkit.Sound;
+import org.bukkit.Statistic;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerStatisticIncrementEvent;
 import org.bukkit.inventory.meta.FireworkMeta;
 
 import com.gmail.nossr50.mcMMO;
+import com.gmail.nossr50.commands.skills.AprilCommand;
+import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.util.player.UserManager;
+import com.gmail.nossr50.util.skills.ParticleEffectUtils;
 
 import com.google.common.collect.ImmutableList;
 
 public final class HolidayManager {
-    private static ArrayList<String> hasCelebrated;
-    private static int CURRENT_YEAR;
-    private static int START_YEAR = 2011;
+    private ArrayList<String> hasCelebrated;
+    private int currentYear;
+    private static final int START_YEAR = 2011;
 
     private static final List<Color> ALL_COLORS;
     private static final List<ChatColor> ALL_CHAT_COLORS;
     private static final List<ChatColor> CHAT_FORMATS;
+
+    public enum FakeSkillType {
+        MACHO,
+        JUMPING,
+        THROWING,
+        WRECKING,
+        CRAFTING,
+        WALKING,
+        SWIMMING,
+        FALLING,
+        CLIMBING,
+        FLYING,
+        DIVING,
+        PIGGY,
+        UNKNOWN;
+
+        public static FakeSkillType getByName(String skillName) {
+            for (FakeSkillType type : values()) {
+                if (type.name().equalsIgnoreCase(skillName)) {
+                    return type;
+                }
+            }
+            return null;
+        }
+
+        public static FakeSkillType getByStatistic(Statistic statistic) {
+            switch (statistic) {
+                case DAMAGE_TAKEN:
+                    return FakeSkillType.MACHO;
+                case JUMP:
+                    return FakeSkillType.JUMPING;
+                case DROP:
+                    return FakeSkillType.THROWING;
+                case MINE_BLOCK:
+                case BREAK_ITEM:
+                    return FakeSkillType.WRECKING;
+                case CRAFT_ITEM:
+                    return FakeSkillType.CRAFTING;
+                case WALK_ONE_CM:
+                    return FakeSkillType.WALKING;
+                case SWIM_ONE_CM:
+                    return FakeSkillType.SWIMMING;
+                case FALL_ONE_CM:
+                    return FakeSkillType.FALLING;
+                case CLIMB_ONE_CM:
+                    return FakeSkillType.CLIMBING;
+                case FLY_ONE_CM:
+                    return FakeSkillType.FLYING;
+                case DIVE_ONE_CM:
+                    return FakeSkillType.DIVING;
+                case PIG_ONE_CM:
+                    return FakeSkillType.PIGGY;
+                default:
+                    return FakeSkillType.UNKNOWN;
+            }
+        }
+    }
+
+    public final Set<Statistic> movementStatistics = EnumSet.of(
+            Statistic.WALK_ONE_CM, Statistic.SWIM_ONE_CM, Statistic.FALL_ONE_CM,
+            Statistic.CLIMB_ONE_CM, Statistic.FLY_ONE_CM, Statistic.DIVE_ONE_CM,
+            Statistic.PIG_ONE_CM);
 
     static {
         List<Color> colors = new ArrayList<Color>();
@@ -67,9 +139,9 @@ public final class HolidayManager {
 
     // This gets called onEnable
     public HolidayManager() {
-        CURRENT_YEAR = Calendar.getInstance().get(Calendar.YEAR);
+        currentYear = Calendar.getInstance().get(Calendar.YEAR);
 
-        File anniversaryFile = new File(mcMMO.getFlatFileDirectory(), "anniversary." + CURRENT_YEAR + ".yml");
+        File anniversaryFile = new File(mcMMO.getFlatFileDirectory(), "anniversary." + currentYear + ".yml");
 
         if (!anniversaryFile.exists()) {
             try {
@@ -113,7 +185,7 @@ public final class HolidayManager {
         Pattern pattern = Pattern.compile("anniversary\\.(?:.+)\\.yml");
 
         for (String fileName : FlatFileDir.list()) {
-            if (!pattern.matcher(fileName).matches() || fileName.equals("anniversary." + CURRENT_YEAR + ".yml")) {
+            if (!pattern.matcher(fileName).matches() || fileName.equals("anniversary." + currentYear + ".yml")) {
                 continue;
             }
 
@@ -127,15 +199,16 @@ public final class HolidayManager {
         }
 
         for (File file : toDelete) {
-            mcMMO.p.debug("Deleted: " + file.getName());
-            file.delete();
+            if (file.delete()) {
+                mcMMO.p.debug("Deleted: " + file.getName());
+            }
         }
     }
 
     // This gets called onDisable
     public void saveAnniversaryFiles() {
         mcMMO.p.debug("Saving anniversary files...");
-        String anniversaryFilePath = mcMMO.getFlatFileDirectory() + "anniversary." + CURRENT_YEAR + ".yml";
+        String anniversaryFilePath = mcMMO.getFlatFileDirectory() + "anniversary." + currentYear + ".yml";
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(anniversaryFilePath));
@@ -152,8 +225,8 @@ public final class HolidayManager {
 
     // This gets called from /mcmmo command
     public void anniversaryCheck(final CommandSender sender) {
-        GregorianCalendar anniversaryStart = new GregorianCalendar(CURRENT_YEAR, Calendar.FEBRUARY, 3);
-        GregorianCalendar anniversaryEnd = new GregorianCalendar(CURRENT_YEAR, Calendar.FEBRUARY, 6);
+        GregorianCalendar anniversaryStart = new GregorianCalendar(currentYear, Calendar.FEBRUARY, 3);
+        GregorianCalendar anniversaryEnd = new GregorianCalendar(currentYear, Calendar.FEBRUARY, 6);
         GregorianCalendar day = new GregorianCalendar();
 
         if (hasCelebrated.contains(sender.getName())) {
@@ -164,7 +237,7 @@ public final class HolidayManager {
             return;
         }
 
-        sender.sendMessage(ChatColor.BLUE + "Happy " + (CURRENT_YEAR - START_YEAR) + " Year Anniversary!  In honor of all of");
+        sender.sendMessage(ChatColor.BLUE + "Happy " + (currentYear - START_YEAR) + " Year Anniversary!  In honor of all of");
         sender.sendMessage(ChatColor.BLUE + "nossr50's work and all the devs, here's a firework show!");
         if (sender instanceof Player) {
             final int firework_amount = 10;
@@ -220,12 +293,12 @@ public final class HolidayManager {
         hasCelebrated.add(sender.getName());
     }
 
-    private boolean getDateRange(Date date, Date start, Date end) {
+    public boolean getDateRange(Date date, Date start, Date end) {
         return !(date.before(start) || date.after(end));
     }
 
-    private void spawnFireworks(Player player) {
-        int power = (int) (Misc.getRandom().nextDouble() * 3) + 1;
+    public void spawnFireworks(Player player) {
+        int power = Misc.getRandom().nextInt(3) + 1;
         Type fireworkType = Type.values()[Misc.getRandom().nextInt(Type.values().length)];
         double varX = Misc.getRandom().nextGaussian() * 3;
         double varZ = Misc.getRandom().nextGaussian() * 3;
@@ -252,5 +325,64 @@ public final class HolidayManager {
         }
 
         return ret.toString();
+    }
+
+    public boolean isAprilFirst() {
+        GregorianCalendar aprilFirst = new GregorianCalendar(currentYear, Calendar.APRIL, 1);
+        GregorianCalendar aprilSecond = new GregorianCalendar(currentYear, Calendar.APRIL, 2);
+        GregorianCalendar day = new GregorianCalendar();
+        return getDateRange(day.getTime(), aprilFirst.getTime(), aprilSecond.getTime());
+    }
+
+    public boolean nearingAprilFirst() {
+        GregorianCalendar start = new GregorianCalendar(Calendar.getInstance().get(Calendar.YEAR), Calendar.MARCH, 28);
+        GregorianCalendar end = new GregorianCalendar(Calendar.getInstance().get(Calendar.YEAR), Calendar.APRIL, 2);
+        GregorianCalendar day = new GregorianCalendar();
+
+        return mcMMO.getHolidayManager().getDateRange(day.getTime(), start.getTime(), end.getTime());
+    }
+
+    public void handleStatisticEvent(PlayerStatisticIncrementEvent event) {
+        Player player = event.getPlayer();
+        Statistic statistic = event.getStatistic();
+        int newValue = event.getNewValue();
+
+        int modifier;
+        switch (statistic) {
+            case DAMAGE_TAKEN:
+                modifier = 500;
+                break;
+            case JUMP:
+                modifier = 500;
+                break;
+            case DROP:
+                modifier = 200;
+                break;
+            case MINE_BLOCK:
+            case BREAK_ITEM:
+                modifier = 500;
+                break;
+            case CRAFT_ITEM:
+                modifier = 100;
+                break;
+            default:
+                return;
+        }
+
+        if (newValue % modifier == 0) {
+            mcMMO.getHolidayManager().levelUpApril(player, FakeSkillType.getByStatistic(statistic));
+        }
+    }
+
+    public void levelUpApril(Player player, FakeSkillType fakeSkillType) {
+        int levelTotal = Misc.getRandom().nextInt(1 + UserManager.getPlayer(player).getSkillLevel(SkillType.MINING)) + 1;
+        player.playSound(player.getLocation(), Sound.LEVEL_UP, Misc.LEVELUP_VOLUME, Misc.LEVELUP_PITCH);
+        player.sendMessage(ChatColor.YELLOW + StringUtils.getCapitalized(fakeSkillType.toString()) + " skill increased by 1. Total (" + levelTotal + ")");
+        ParticleEffectUtils.fireworkParticleShower(player, ALL_COLORS.get(Misc.getRandom().nextInt(ALL_COLORS.size())));
+    }
+
+    public void registerAprilCommand() {
+        PluginCommand command = mcMMO.p.getCommand("mcfools");
+        command.setExecutor(new AprilCommand());
     }
 }

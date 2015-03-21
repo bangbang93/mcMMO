@@ -27,10 +27,13 @@ public class McmmoCommand implements CommandExecutor {
 
                 if (Config.getInstance().getDonateMessageEnabled()) {
                     sender.sendMessage(LocaleLoader.getString("MOTD.Donate"));
-                    sender.sendMessage(ChatColor.GOLD + " - " + ChatColor.GREEN + "gjmcferrin@gmail.com" + ChatColor.GOLD + " Paypal");
+                    sender.sendMessage(ChatColor.GOLD + " - " + ChatColor.GREEN + "tft_02@hotmail.com" + ChatColor.GOLD + " Paypal");
                 }
 
-                sender.sendMessage(LocaleLoader.getString("MOTD.Version", mcMMO.p.getDescription().getVersion()));
+                if (Permissions.showversion(sender)) {
+                    sender.sendMessage(LocaleLoader.getString("MOTD.Version", mcMMO.p.getDescription().getVersion()));
+                }
+
                 mcMMO.getHolidayManager().anniversaryCheck(sender);
                 return true;
 

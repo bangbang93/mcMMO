@@ -4,13 +4,12 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.inventory.ItemStack;
 
-import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.AdvancedConfig;
+import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.util.Misc;
 
 public class Archery {
@@ -21,9 +20,9 @@ public class Archery {
     public static double skillShotMaxBonusPercentage = AdvancedConfig.getInstance().getSkillShotBonusMax();
     public static double skillShotMaxBonusDamage     = AdvancedConfig.getInstance().getSkillShotDamageMax();
 
-    public static double dazeModifier      = AdvancedConfig.getInstance().getDazeModifier();
+    public static double dazeBonusDamage = AdvancedConfig.getInstance().getDazeBonusDamage();
 
-    public static final double DISTANCE_XP_MULTIPLIER = 0.025;
+    public static final double DISTANCE_XP_MULTIPLIER = ExperienceConfig.getInstance().getArcheryDistanceMultiplier();
 
     protected static void incrementTrackerValue(LivingEntity livingEntity) {
         for (TrackedEntity trackedEntity : trackedEntities) {
@@ -62,15 +61,5 @@ public class Archery {
                 return;
             }
         }
-    }
-
-    public static Location stringToLocation(String location) {
-        String[] values = location.split(",");
-
-        return new Location(mcMMO.p.getServer().getWorld(values[0]), Double.parseDouble(values[1]), Double.parseDouble(values[2]), Double.parseDouble(values[3]), Float.parseFloat(values[4]), Float.parseFloat(values[5]));
-    }
-
-    public static String locationToString(Location location) {
-        return location.getWorld().getName() + "," + location.getX() + "," + location.getY() + "," + location.getZ() + "," + location.getYaw() + "," + location.getPitch();
     }
 }

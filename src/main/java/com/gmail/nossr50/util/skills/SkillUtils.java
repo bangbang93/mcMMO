@@ -8,7 +8,11 @@ import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Recipe;
+import org.bukkit.inventory.ShapedRecipe;
+import org.bukkit.inventory.ShapelessRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.material.MaterialData;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -20,8 +24,10 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.events.skills.secondaryabilities.SecondaryAbilityEvent;
 import com.gmail.nossr50.events.skills.secondaryabilities.SecondaryAbilityWeightedActivationCheckEvent;
 import com.gmail.nossr50.locale.LocaleLoader;
+import com.gmail.nossr50.util.EventUtils;
 import com.gmail.nossr50.util.ItemUtils;
 import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.StringUtils;
@@ -201,13 +207,25 @@ public class SkillUtils {
         double chance = (maxChance / maxLevel) * Math.min(skillLevel, maxLevel) / activationChance;
         SecondaryAbilityWeightedActivationCheckEvent event = new SecondaryAbilityWeightedActivationCheckEvent(player, skillAbility, chance);
         mcMMO.p.getServer().getPluginManager().callEvent(event);
-        return (event.getChance() * activationChance) > Misc.getRandom().nextInt(activationChance);
+        return (event.getChance() * activationChance) > Misc.getRandom().nextInt(activationChance) && !event.isCancelled();
     }
 
-    public static boolean treasureDropSuccessful(Player player, double dropChance, int activationChance) {;
+    public static boolean activationSuccessful(SecondaryAbility skillAbility, Player player, double staticChance, int activationChance) {
+        double chance = staticChance / activationChance;
+        SecondaryAbilityWeightedActivationCheckEvent event = new SecondaryAbilityWeightedActivationCheckEvent(player, skillAbility, chance);
+        mcMMO.p.getServer().getPluginManager().callEvent(event);
+        return (event.getChance() * activationChance) > Misc.getRandom().nextInt(activationChance) && !event.isCancelled();
+    }
+
+    public static boolean activationSuccessful(SecondaryAbility skillAbility, Player player) {
+        SecondaryAbilityEvent event = EventUtils.callSecondaryAbilityEvent(player, skillAbility);
+        return !event.isCancelled();
+    }
+
+    public static boolean treasureDropSuccessful(Player player, double dropChance, int activationChance) {
         SecondaryAbilityWeightedActivationCheckEvent event = new SecondaryAbilityWeightedActivationCheckEvent(player, SecondaryAbility.EXCAVATION_TREASURE_HUNTER, dropChance / activationChance);
         mcMMO.p.getServer().getPluginManager().callEvent(event);
-        return (event.getChance() * activationChance) > (Misc.getRandom().nextDouble() * activationChance);
+        return (event.getChance() * activationChance) > (Misc.getRandom().nextDouble() * activationChance) && !event.isCancelled();
     }
 
     private static boolean isLocalizedSkill(String skillName) {
@@ -218,5 +236,69 @@ public class SkillUtils {
         }
 
         return false;
+    }
+
+    protected static Material getRepairAndSalvageItem(ItemStack inHand) {
+        if (ItemUtils.isDiamondTool(inHand) || ItemUtils.isDiamondArmor(inHand)) {
+            return Material.DIAMOND;
+        }
+        else if (ItemUtils.isGoldTool(inHand) || ItemUtils.isGoldArmor(inHand)) {
+            return Material.GOLD_INGOT;
+        }
+        else if (ItemUtils.isIronTool(inHand) || ItemUtils.isIronArmor(inHand)) {
+            return Material.IRON_INGOT;
+        }
+        else if (ItemUtils.isStoneTool(inHand)) {
+            return Material.COBBLESTONE;
+        }
+        else if (ItemUtils.isWoodTool(inHand)) {
+            return Material.WOOD;
+        }
+        else if (ItemUtils.isLeatherArmor(inHand)) {
+            return Material.LEATHER;
+        }
+        else if (ItemUtils.isStringTool(inHand)) {
+            return Material.STRING;
+        }
+        else {
+            return null;
+        }
+    }
+
+    public static int getRepairAndSalvageQuantities(ItemStack item) {
+        return getRepairAndSalvageQuantities(item, getRepairAndSalvageItem(item), (byte) -1);
+    }
+
+    public static int getRepairAndSalvageQuantities(ItemStack item, Material repairMaterial, byte repairMetadata) {
+        // Workaround for Bukkit bug where damaged items would not return any recipes
+        item = item.clone();
+        item.setDurability((short) 0);
+
+        int quantity = 0;
+        MaterialData repairData = repairMaterial != null ? new MaterialData(repairMaterial, repairMetadata) : null;
+        List<Recipe> recipes = mcMMO.p.getServer().getRecipesFor(item);
+
+        if (recipes.isEmpty()) {
+            return quantity;
+        }
+
+        Recipe recipe = recipes.get(0);
+
+        if (recipe instanceof ShapelessRecipe) {
+            for (ItemStack ingredient : ((ShapelessRecipe) recipe).getIngredientList()) {
+                if (ingredient != null && (repairMaterial == null || ingredient.getType() == repairMaterial) && (repairMetadata == -1 || ingredient.getData().equals(repairData))) {
+                    quantity += ingredient.getAmount();
+                }
+            }
+        }
+        else if (recipe instanceof ShapedRecipe) {
+            for (ItemStack ingredient : ((ShapedRecipe) recipe).getIngredientMap().values()) {
+                if (ingredient != null && (repairMaterial == null || ingredient.getType() == repairMaterial) && (repairMetadata == -1 || ingredient.getData().equals(repairData))) {
+                    quantity += ingredient.getAmount();
+                }
+            }
+        }
+
+        return quantity;
     }
 }

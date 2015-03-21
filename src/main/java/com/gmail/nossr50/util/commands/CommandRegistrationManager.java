@@ -7,6 +7,7 @@ import org.bukkit.command.PluginCommand;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.commands.KrakenCommand;
+import com.gmail.nossr50.commands.McImportCommand;
 import com.gmail.nossr50.commands.McabilityCommand;
 import com.gmail.nossr50.commands.McconvertCommand;
 import com.gmail.nossr50.commands.McgodCommand;
@@ -43,6 +44,7 @@ import com.gmail.nossr50.commands.skills.FishingCommand;
 import com.gmail.nossr50.commands.skills.HerbalismCommand;
 import com.gmail.nossr50.commands.skills.MiningCommand;
 import com.gmail.nossr50.commands.skills.RepairCommand;
+import com.gmail.nossr50.commands.skills.SalvageCommand;
 import com.gmail.nossr50.commands.skills.SmeltingCommand;
 import com.gmail.nossr50.commands.skills.SwordsCommand;
 import com.gmail.nossr50.commands.skills.TamingCommand;
@@ -107,6 +109,10 @@ public final class CommandRegistrationManager {
 
                 case REPAIR:
                     command.setExecutor(new RepairCommand());
+                    break;
+
+                case SALVAGE:
+                    command.setExecutor(new SalvageCommand());
                     break;
 
                 case SMELTING:
@@ -404,8 +410,18 @@ public final class CommandRegistrationManager {
         command.setExecutor(new KrakenCommand());
     }
 
+    private static void registerMcImportCommand() {
+        PluginCommand command = mcMMO.p.getCommand("mcimport");
+        command.setDescription("Import mod config files"); //TODO: Localize
+        command.setPermission("mcmmo.commands.mcimport");
+        command.setPermissionMessage(permissionsMessage);
+        command.setUsage(LocaleLoader.getString("Commands.Usage.0", "mcimport"));
+        command.setExecutor(new McImportCommand());
+    }
+
     public static void registerCommands() {
         // Generic Commands
+        registerMcImportCommand();
         registerKrakenCommand();
         registerMcabilityCommand();
         registerMcgodCommand();

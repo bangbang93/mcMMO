@@ -7,6 +7,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
+import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.util.StringUtil;
 
 import com.gmail.nossr50.mcMMO;
@@ -15,12 +16,10 @@ import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SkillType;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.runnables.commands.MctopCommandAsyncTask;
-import com.gmail.nossr50.util.Misc;
 import com.gmail.nossr50.util.Permissions;
 import com.gmail.nossr50.util.StringUtils;
 import com.gmail.nossr50.util.commands.CommandUtils;
 import com.gmail.nossr50.util.player.UserManager;
-
 import com.google.common.collect.ImmutableList;
 
 public class MctopCommand implements TabExecutor {
@@ -84,11 +83,23 @@ public class MctopCommand implements TabExecutor {
         }
 
         if (sender instanceof Player) {
-            McMMOPlayer mcMMOPlayer = UserManager.getPlayer(sender.getName());
+            if (!CommandUtils.hasPlayerDataKey(sender)) {
+                return;
+            }
 
-            if (mcMMOPlayer.getDatabaseATS() + Misc.PLAYER_DATABASE_COOLDOWN_MILLIS > System.currentTimeMillis()) {
+            McMMOPlayer mcMMOPlayer = UserManager.getPlayer(sender.getName());
+            long cooldownMillis = Math.max(Config.getInstance().getDatabasePlayerCooldown(), 1750);
+
+            if (mcMMOPlayer.getDatabaseATS() + cooldownMillis > System.currentTimeMillis()) {
                 sender.sendMessage(LocaleLoader.getString("Commands.Database.Cooldown"));
                 return;
+            }
+
+            if (((Player) sender).hasMetadata(mcMMO.databaseCommandKey)) {
+                sender.sendMessage(LocaleLoader.getString("Commands.Database.Processing"));
+                return;
+            } else {
+                ((Player) sender).setMetadata(mcMMO.databaseCommandKey, new FixedMetadataValue(mcMMO.p, null));
             }
 
             mcMMOPlayer.actualizeDatabaseATS();
@@ -99,7 +110,7 @@ public class MctopCommand implements TabExecutor {
 
     private void display(int page, SkillType skill, CommandSender sender) {
         boolean useBoard = (sender instanceof Player) && (Config.getInstance().getTopUseBoard());
-        boolean useChat = useBoard ? Config.getInstance().getTopUseChat() : true;
+        boolean useChat = !useBoard || Config.getInstance().getTopUseChat();
 
         new MctopCommandAsyncTask(page, skill, sender, useBoard, useChat).runTaskAsynchronously(mcMMO.p);
     }

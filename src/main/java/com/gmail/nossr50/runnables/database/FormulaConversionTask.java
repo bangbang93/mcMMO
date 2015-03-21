@@ -28,7 +28,7 @@ public class FormulaConversionTask extends BukkitRunnable {
         int convertedUsers = 0;
         long startMillis = System.currentTimeMillis();
         for (String playerName : mcMMO.getDatabaseManager().getStoredUsers()) {
-            McMMOPlayer mcMMOPlayer = UserManager.getPlayer(playerName, true);
+            McMMOPlayer mcMMOPlayer = UserManager.getOfflinePlayer(playerName);
             PlayerProfile profile;
 
             // If the mcMMOPlayer doesn't exist, create a temporary profile and check if it's present in the database. If it's not, abort the process.
@@ -41,7 +41,8 @@ public class FormulaConversionTask extends BukkitRunnable {
                 }
 
                 editValues(profile);
-                profile.save(); // Since this is a temporary profile, we save it here.
+                // Since this is a temporary profile, we save it here.
+                profile.scheduleAsyncSave();
             }
             else {
                 profile = mcMMOPlayer.getProfile();

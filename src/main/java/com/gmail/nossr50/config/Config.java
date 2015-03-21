@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Set;
 
 import org.bukkit.Material;
+import org.bukkit.TreeSpecies;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.EntityType;
 
+import com.gmail.nossr50.database.SQLDatabaseManager.PoolIdentifier;
 import com.gmail.nossr50.datatypes.MobHealthbarType;
 import com.gmail.nossr50.datatypes.party.PartyFeature;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
@@ -38,6 +40,16 @@ public class Config extends AutoUpdateConfigLoader {
         /* General Settings */
         if (getSaveInterval() <= 0) {
             reason.add("General.Save_Interval should be greater than 0!");
+        }
+
+        /* MySQL Settings */
+        for (PoolIdentifier identifier : PoolIdentifier.values()) {
+            if (getMySQLMaxConnections(identifier) <= 0) {
+                reason.add("MySQL.Database.MaxConnections." + StringUtils.getCapitalized(identifier.toString()) + " should be greater than 0!");
+            }
+            if (getMySQLMaxPoolSize(identifier) <= 0) {
+                reason.add("MySQL.Database.MaxPoolSize." + StringUtils.getCapitalized(identifier.toString()) + " should be greater than 0!");
+            }
         }
 
         /* Mob Healthbar */
@@ -182,20 +194,40 @@ public class Config extends AutoUpdateConfigLoader {
             reason.add("Cannot use the same item for Repair and Salvage anvils!");
         }
 
-        if (getTamingCOTWWolfCost() < 1) {
-            reason.add("Skills.Taming.Call_Of_The_Wild.Bones_Required should be at least 1!");
+        if (getTamingCOTWMaterial(EntityType.WOLF) == null) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Wolf.Item_Material is invalid!!");
         }
 
-        if (getTamingCOTWOcelotCost() < 1) {
-            reason.add("Skills.Taming.Call_Of_The_Wild.Fish_Required should be at least 1!");
+        if (getTamingCOTWMaterial(EntityType.OCELOT) == null) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Ocelot.Item_Material is invalid!!");
         }
 
-        if (getTamingCOTWAmount(EntityType.OCELOT) <= 0) {
-            reason.add("Skills.Taming.Call_Of_The_Wild.Ocelot_Amount should be greater than 0!");
+        if (getTamingCOTWMaterial(EntityType.HORSE) == null) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Horse.Item_Material is invalid!!");
+        }
+
+        if (getTamingCOTWCost(EntityType.WOLF) <= 0) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Wolf.Item_Amount should be greater than 0!");
+        }
+
+        if (getTamingCOTWCost(EntityType.OCELOT) <= 0) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Ocelot.Item_Amount should be greater than 0!");
+        }
+
+        if (getTamingCOTWCost(EntityType.HORSE) <= 0) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Horse.Item_Amount should be greater than 0!");
         }
 
         if (getTamingCOTWAmount(EntityType.WOLF) <= 0) {
-            reason.add("Skills.Taming.Call_Of_The_Wild.Wolf_Amount should be greater than 0!");
+            reason.add("Skills.Taming.Call_Of_The_Wild.Wolf.Summon_Amount should be greater than 0!");
+        }
+
+        if (getTamingCOTWAmount(EntityType.OCELOT) <= 0) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Ocelot.Summon_Amount should be greater than 0!");
+        }
+
+        if (getTamingCOTWAmount(EntityType.HORSE) <= 0) {
+            reason.add("Skills.Taming.Call_Of_The_Wild.Horse.Summon_Amount should be greater than 0!");
         }
 
         return noErrorsInConfig(reason);
@@ -211,14 +243,13 @@ public class Config extends AutoUpdateConfigLoader {
     /* General Settings */
     public String getLocale() { return config.getString("General.Locale", "en_us"); }
     public boolean getMOTDEnabled() { return config.getBoolean("General.MOTD_Enabled", true); }
+    public boolean getShowProfileLoadedMessage() { return config.getBoolean("General.Show_Profile_Loaded", true); }
     public boolean getDonateMessageEnabled() { return config.getBoolean("Commands.mcmmo.Donate_Message", true); }
     public int getSaveInterval() { return config.getInt("General.Save_Interval", 10); }
     public boolean getStatsTrackingEnabled() { return config.getBoolean("General.Stats_Tracking", true); }
     public boolean getUpdateCheckEnabled() { return config.getBoolean("General.Update_Check", true); }
     public boolean getPreferBeta() { return config.getBoolean("General.Prefer_Beta", false); }
-    public boolean getEventCallbackEnabled() { return config.getBoolean("General.Event_Callback", true); }
     public boolean getVerboseLoggingEnabled() { return config.getBoolean("General.Verbose_Logging", false); }
-    public boolean getConfigOverwriteEnabled() { return config.getBoolean("General.Config_Update_Overwrite", true); }
 
     public String getPartyChatPrefix() { return config.getString("Commands.partychat.Chat_Prefix_Format", "[[GREEN]]([[WHITE]]{0}[[GREEN]])"); }
     public boolean getPartyChatColorLeaderName() { return config.getBoolean("Commands.partychat.Gold_Leader_Name", true); }
@@ -229,8 +260,10 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getAdminDisplayNames() { return config.getBoolean("Commands.adminchat.Use_Display_Names", true); }
 
     public boolean getMatchOfflinePlayers() { return config.getBoolean("Commands.Generic.Match_OfflinePlayers", false); }
+    public long getDatabasePlayerCooldown() { return config.getLong("Commands.Database.Player_Cooldown", 1750); }
 
     public boolean getLevelUpSoundsEnabled() { return config.getBoolean("General.LevelUp_Sounds", true); }
+    public boolean getRefreshChunksEnabled() { return config.getBoolean("General.Refresh_Chunks", false); }
 
     /* Mob Healthbar */
     public MobHealthbarType getMobHealthbarDefault() {
@@ -245,6 +278,13 @@ public class Config extends AutoUpdateConfigLoader {
     public int getMobHealthbarTime() { return config.getInt("Mob_Healthbar.Display_Time", 3); }
 
     /* Scoreboards */
+    public boolean getPowerLevelTagsEnabled() { return config.getBoolean("Scoreboard.Power_Level_Tags", false); }
+    public boolean getAllowKeepBoard() { return config.getBoolean("Scoreboard.Allow_Keep", true); }
+    public int getTipsAmount() { return config.getInt("Scoreboard.Tips_Amount", 5); }
+    public boolean getShowStatsAfterLogin() { return config.getBoolean("Scoreboard.Show_Stats_After_Login", false); }
+    public boolean getScoreboardRainbows() { return config.getBoolean("Scoreboard.Rainbows", false); }
+    public boolean getShowAbilityNames() { return config.getBoolean("Scoreboard.Ability_Names", true); }
+
     public boolean getRankUseChat() { return config.getBoolean("Scoreboard.Types.Rank.Print", false); }
     public boolean getRankUseBoard() { return config.getBoolean("Scoreboard.Types.Rank.Board", true); }
     public int getRankScoreboardTime() { return config.getInt("Scoreboard.Types.Rank.Display_Time", 10); }
@@ -270,11 +310,6 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getSkillLevelUpBoard() { return config.getBoolean("Scoreboard.Types.Skill.LevelUp_Board", true); }
     public int getSkillLevelUpTime() { return config.getInt("Scoreboard.Types.Skill.LevelUp_Time", 5); }
 
-    public boolean getPowerLevelTagsEnabled() { return config.getBoolean("Scoreboard.Power_Level_Tags", false); }
-
-    public boolean getAllowKeepBoard() { return config.getBoolean("Scoreboard.Allow_Keep", true); }
-    public boolean getScoreboardRainbows() { return config.getBoolean("Scoreboard.Rainbows", false); }
-
     /* Database Purging */
     public int getPurgeInterval() { return config.getInt("Database_Purging.Purge_Interval", -1); }
     public int getOldUsersCutoff() { return config.getInt("Database_Purging.Old_User_Cutoff", 6); }
@@ -293,6 +328,8 @@ public class Config extends AutoUpdateConfigLoader {
     public int getMySQLServerPort() { return config.getInt("MySQL.Server.Port", 3306); }
     public String getMySQLServerName() { return config.getString("MySQL.Server.Address", "localhost"); }
     public String getMySQLUserPassword() { return getStringIncludingInts("MySQL.Database.User_Password"); }
+    public int getMySQLMaxConnections(PoolIdentifier identifier) { return config.getInt("MySQL.Database.MaxConnections." + StringUtils.getCapitalized(identifier.toString()), 30); }
+    public int getMySQLMaxPoolSize(PoolIdentifier identifier) { return config.getInt("MySQL.Database.MaxPoolSize." + StringUtils.getCapitalized(identifier.toString()), 10); }
 
     private String getStringIncludingInts(String key) {
         String str = config.getString(key);
@@ -336,17 +373,23 @@ public class Config extends AutoUpdateConfigLoader {
     public Material getChimaeraItem() { return Material.matchMaterial(config.getString("Items.Chimaera_Wing.Item_Name", "Feather")); }
     public boolean getChimaeraEnabled() { return config.getBoolean("Items.Chimaera_Wing.Enabled", true); }
     public boolean getChimaeraPreventUseUnderground() { return config.getBoolean("Items.Chimaera_Wing.Prevent_Use_Underground", true); }
+    public boolean getChimaeraUseBedSpawn() { return config.getBoolean("Items.Chimaera_Wing.Use_Bed_Spawn", true); }
     public int getChimaeraCooldown() { return config.getInt("Items.Chimaera_Wing.Cooldown", 240); }
     public int getChimaeraWarmup() { return config.getInt("Items.Chimaera_Wing.Warmup", 5); }
     public int getChimaeraRecentlyHurtCooldown() { return config.getInt("Items.Chimaera_Wing.RecentlyHurt_Cooldown", 60); }
     public boolean getChimaeraSoundEnabled() { return config.getBoolean("Items.Chimaera_Wing.Sound_Enabled", true); }
 
+    public boolean getFluxPickaxeEnabled() { return config.getBoolean("Items.Flux_Pickaxe.Enabled", true); }
+    public boolean getFluxPickaxeSoundEnabled() { return config.getBoolean("Items.Flux_Pickaxe.Sound_Enabled", true); }
+
     /* Particles */
     public boolean getAbilityActivationEffectEnabled() { return config.getBoolean("Particles.Ability_Activation", true); }
     public boolean getAbilityDeactivationEffectEnabled() { return config.getBoolean("Particles.Ability_Deactivation", true); }
-    public boolean getDodgeEffectEnabled() { return config.getBoolean("Particles.Dodge", true); }
     public boolean getBleedEffectEnabled() { return config.getBoolean("Particles.Bleed", true); }
+    public boolean getDodgeEffectEnabled() { return config.getBoolean("Particles.Dodge", true); }
+    public boolean getFluxEffectEnabled() { return config.getBoolean("Particles.Flux", true); }
     public boolean getGreaterImpactEffectEnabled() { return config.getBoolean("Particles.Greater_Impact", true); }
+    public boolean getCallOfTheWildEffectEnabled() { return config.getBoolean("Particles.Call_of_the_Wild", true); }
     public boolean getLevelUpEffectsEnabled() { return config.getBoolean("Particles.LevelUp_Enabled", true); }
     public int getLevelUpEffectsTier() { return config.getInt("Particles.LevelUp_Tier", 100); }
     public boolean getLargeFireworks() { return config.getBoolean("Particles.LargeFireworks", true); }
@@ -376,7 +419,7 @@ public class Config extends AutoUpdateConfigLoader {
     public int getPTPCommandWarmup() { return config.getInt("Commands.ptp.Warmup", 5); }
     public int getPTPCommandRecentlyHurtCooldown() { return config.getInt("Commands.ptp.RecentlyHurt_Cooldown", 60); }
     public int getPTPCommandTimeout() { return config.getInt("Commands.ptp.Request_Timeout", 300); }
-    public boolean getPTPCommandConfirmRequired() { return config.getBoolean("Commands.ptp.Confirm_Required", true); }
+    public boolean getPTPCommandConfirmRequired() { return config.getBoolean("Commands.ptp.Accept_Required", true); }
     public boolean getPTPCommandWorldPermissions() { return config.getBoolean("Commands.ptp.World_Based_Permissions", false); }
 
     /* Inspect command distance */
@@ -423,14 +466,17 @@ public class Config extends AutoUpdateConfigLoader {
 
     /* Acrobatics */
     public boolean getDodgeLightningDisabled() { return config.getBoolean("Skills.Acrobatics.Prevent_Dodge_Lightning", false); }
-    public boolean getPreventXPAfterTeleport() { return config.getBoolean("Skills.Acrobatics.Prevent_XP_After_Teleport", true); }
+    public int getXPAfterTeleportCooldown() { return config.getInt("Skills.Acrobatics.XP_After_Teleport_Cooldown", 5); }
 
     /* Alchemy */
     public boolean getEnabledForHoppers() { return config.getBoolean("Skills.Alchemy.Enabled_for_Hoppers", true); }
-    public boolean getPreventHopperTransfer() { return config.getBoolean("Skills.Alchemy.Prevent_Hopper_Transfer", false); }
+    public boolean getPreventHopperTransferIngredients() { return config.getBoolean("Skills.Alchemy.Prevent_Hopper_Transfer_Ingredients", false); }
+    public boolean getPreventHopperTransferBottles() { return config.getBoolean("Skills.Alchemy.Prevent_Hopper_Transfer_Bottles", false); }
 
     /* Fishing */
     public boolean getFishingDropsEnabled() { return config.getBoolean("Skills.Fishing.Drops_Enabled", true); }
+    public boolean getFishingOverrideTreasures() { return config.getBoolean("Skills.Fishing.Override_Vanilla_Treasures", true); }
+    public boolean getFishingExtraFish() { return config.getBoolean("Skills.Fishing.Extra_Fish", true); }
 
     /* Mining */
     public Material getDetonatorItem() { return Material.matchMaterial(config.getString("Skills.Mining.Detonator_Name", "FLINT_AND_STEEL")); }
@@ -440,26 +486,30 @@ public class Config extends AutoUpdateConfigLoader {
     public boolean getRepairAnvilPlaceSoundsEnabled() { return config.getBoolean("Skills.Repair.Anvil_Placed_Sounds", true); }
     public boolean getRepairAnvilUseSoundsEnabled() { return config.getBoolean("Skills.Repair.Anvil_Use_Sounds", true); }
     public Material getRepairAnvilMaterial() { return Material.matchMaterial(config.getString("Skills.Repair.Anvil_Material", "IRON_BLOCK")); }
-    public Material getSalvageAnvilMaterial() { return Material.matchMaterial(config.getString("Skills.Repair.Salvage_Anvil_Material", "GOLD_BLOCK")); }
-    public boolean getSalvageTools() { return config.getBoolean("Skills.Repair.Salvage_tools", true); }
-    public boolean getSalvageArmor() { return config.getBoolean("Skills.Repair.Salvage_armor", true); }
     public boolean getRepairConfirmRequired() { return config.getBoolean("Skills.Repair.Confirm_Required", true); }
+
+    /* Salvage */
+    public boolean getSalvageAnvilMessagesEnabled() { return config.getBoolean("Skills.Salvage.Anvil_Messages", true); }
+    public boolean getSalvageAnvilPlaceSoundsEnabled() { return config.getBoolean("Skills.Salvage.Anvil_Placed_Sounds", true); }
+    public boolean getSalvageAnvilUseSoundsEnabled() { return config.getBoolean("Skills.Salvage.Anvil_Use_Sounds", true); }
+    public Material getSalvageAnvilMaterial() { return Material.matchMaterial(config.getString("Skills.Salvage.Anvil_Material", "GOLD_BLOCK")); }
+    public boolean getSalvageConfirmRequired() { return config.getBoolean("Skills.Salvage.Confirm_Required", true); }
 
     /* Unarmed */
     public boolean getUnarmedBlockCrackerSmoothbrickToCracked() { return config.getBoolean("Skills.Unarmed.Block_Cracker.SmoothBrick_To_CrackedBrick", true); }
+    public boolean getUnarmedItemPickupDisabled() { return config.getBoolean("Skills.Unarmed.Item_Pickup_Disabled_Full_Inventory", true); }
+    public boolean getUnarmedItemsAsUnarmed() { return config.getBoolean("Skills.Unarmed.Items_As_Unarmed", false); }
 
     /* Taming */
-    public int getTamingCOTWHorseCost() { return config.getInt("Skills.Taming.Call_Of_The_Wild.Apples_Required", 10); }
-    public int getTamingCOTWWolfCost() { return config.getInt("Skills.Taming.Call_Of_The_Wild.Bones_Required", 10); }
-    public int getTamingCOTWOcelotCost() { return config.getInt("Skills.Taming.Call_Of_The_Wild.Fish_Required", 10); }
+    public Material getTamingCOTWMaterial(EntityType type) { return Material.matchMaterial(config.getString("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type) + ".Item_Material")); }
+    public int getTamingCOTWCost(EntityType type) { return config.getInt("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type) + ".Item_Amount"); }
+    public int getTamingCOTWAmount(EntityType type) { return config.getInt("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type) + ".Summon_Amount"); }
+    public int getTamingCOTWLength(EntityType type) { return config.getInt("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type)+ ".Summon_Length"); }
+    public int getTamingCOTWMaxAmount(EntityType type) { return config.getInt("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type)+ ".Summon_Max_Amount"); }
     public double getTamingCOTWRange() { return config.getDouble("Skills.Taming.Call_Of_The_Wild.Range", 40.0D); }
-    public int getTamingCOTWAmount(EntityType type) { return config.getInt("Skills.Taming.Call_Of_The_Wild." + StringUtils.getPrettyEntityTypeString(type)+ "_Amount"); }
 
     /* Woodcutting */
-    public boolean getOakDoubleDropsEnabled() { return config.getBoolean("Double_Drops.Woodcutting.Oak", true); }
-    public boolean getBirchDoubleDropsEnabled() { return config.getBoolean("Double_Drops.Woodcutting.Birch", true); }
-    public boolean getSpruceDoubleDropsEnabled() { return config.getBoolean("Double_Drops.Woodcutting.Spruce", true); }
-    public boolean getJungleDoubleDropsEnabled() { return config.getBoolean("Double_Drops.Woodcutting.Jungle", true); }
+    public boolean getWoodcuttingDoubleDropsEnabled(TreeSpecies species) { return config.getBoolean("Double_Drops.Woodcutting." + StringUtils.getPrettyTreeSpeciesString(species).replace(" ", "_")); }
     public boolean getTreeFellerSoundsEnabled() { return config.getBoolean("Skills.Woodcutting.Tree_Feller_Sounds", true); }
 
     /* AFK Leveling */

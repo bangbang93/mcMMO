@@ -12,6 +12,7 @@ import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.datatypes.player.McMMOPlayer;
 import com.gmail.nossr50.datatypes.skills.SecondaryAbility;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.datatypes.skills.XPGainReason;
 import com.gmail.nossr50.locale.LocaleLoader;
 import com.gmail.nossr50.skills.SkillManager;
 import com.gmail.nossr50.util.Misc;
@@ -62,7 +63,7 @@ public class AcrobaticsManager extends SkillManager {
 
             // Why do we check respawn cooldown here?
             if (SkillUtils.cooldownExpired(mcMMOPlayer.getRespawnATS(), Misc.PLAYER_RESPAWN_COOLDOWN_SECONDS)) {
-                applyXpGain((float) (damage * Acrobatics.dodgeXpModifier));
+                applyXpGain((float) (damage * Acrobatics.dodgeXpModifier), XPGainReason.PVP);
             }
 
             return modifiedDamage;
@@ -88,12 +89,12 @@ public class AcrobaticsManager extends SkillManager {
 
         if (!isFatal(modifiedDamage) && SkillUtils.activationSuccessful(SecondaryAbility.ROLL, player, getSkillLevel(), activationChance)) {
             player.sendMessage(LocaleLoader.getString("Acrobatics.Roll.Text"));
-            applyXpGain(calculateRollXP(damage, true));
+            applyXpGain(calculateRollXP(damage, true), XPGainReason.PVE);
 
             return modifiedDamage;
         }
         else if (!isFatal(damage)) {
-            applyXpGain(calculateRollXP(damage, false));
+            applyXpGain(calculateRollXP(damage, false), XPGainReason.PVE);
         }
 
         lastFallLocation = player.getLocation();
@@ -112,12 +113,12 @@ public class AcrobaticsManager extends SkillManager {
 
         if (!isFatal(modifiedDamage) && SkillUtils.activationSuccessful(SecondaryAbility.GRACEFUL_ROLL, getPlayer(), getSkillLevel(), activationChance)) {
             getPlayer().sendMessage(LocaleLoader.getString("Acrobatics.Ability.Proc"));
-            applyXpGain(calculateRollXP(damage, true));
+            applyXpGain(calculateRollXP(damage, true), XPGainReason.PVE);
 
             return modifiedDamage;
         }
         else if (!isFatal(damage)) {
-            applyXpGain(calculateRollXP(damage, false));
+            applyXpGain(calculateRollXP(damage, false), XPGainReason.PVE);
         }
 
         return damage;
@@ -141,13 +142,14 @@ public class AcrobaticsManager extends SkillManager {
         }
 
         Location fallLocation = player.getLocation();
+        int maxTries = Config.getInstance().getAcrobaticsAFKMaxTries();
 
         boolean sameLocation = (lastFallLocation != null && Misc.isNear(lastFallLocation, fallLocation, 2));
 
-        fallTries = sameLocation ? fallTries + 1 : Math.max(fallTries - 1, 0);
+        fallTries = sameLocation ? Math.min(fallTries + 1, maxTries) : Math.max(fallTries - 1, 0);
         lastFallLocation = fallLocation;
 
-        return fallTries > Config.getInstance().getAcrobaticsAFKMaxTries();
+        return fallTries + 1 > maxTries;
     }
 
     private boolean isFatal(double damage) {

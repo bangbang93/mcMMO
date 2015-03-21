@@ -1,6 +1,7 @@
 package com.gmail.nossr50.util;
 
 import org.bukkit.Material;
+import org.bukkit.TreeSpecies;
 import org.bukkit.entity.EntityType;
 
 import com.gmail.nossr50.datatypes.party.PartyFeature;
@@ -28,6 +29,10 @@ public class StringUtils {
 
     public static String getPrettyAbilityString(AbilityType ability) {
         return createPrettyEnumString(ability.toString());
+    }
+
+    public static String getPrettyTreeSpeciesString(TreeSpecies species) {
+        return createPrettyEnumString(species.toString());
     }
 
     public static String getPrettySecondaryAbilityString(SecondaryAbility secondaryAbility) {
@@ -67,36 +72,6 @@ public class StringUtils {
         }
 
         return prettyString;
-    }
-
-    /**
-     * Gets the int represented by this string.
-     *
-     * @param string The string to parse
-     * @return the int represented by this string
-     */
-    public static int getInt(String string) {
-        try {
-            return Integer.parseInt(string);
-        }
-        catch (NumberFormatException nFE) {
-            return 0;
-        }
-    }
-
-    /**
-     * Gets the long represented by this string.
-     *
-     * @param string The string to parse
-     * @return the long represented by this string
-     */
-    public static long getLong(String string) {
-        try {
-            return Long.parseLong(string);
-        }
-        catch (NumberFormatException nFE) {
-            return 0;
-        }
     }
 
     /**

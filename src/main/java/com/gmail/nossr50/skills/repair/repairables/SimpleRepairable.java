@@ -2,20 +2,25 @@ package com.gmail.nossr50.skills.repair.repairables;
 
 import org.bukkit.Material;
 
+import com.gmail.nossr50.datatypes.skills.ItemType;
+import com.gmail.nossr50.datatypes.skills.MaterialType;
+
 
 public class SimpleRepairable implements Repairable {
     private final Material itemMaterial, repairMaterial;
     private final int minimumQuantity, minimumLevel;
     private final short maximumDurability, baseRepairDurability;
     private final byte repairMetadata;
-    private final RepairItemType repairItemType;
-    private final RepairMaterialType repairMaterialType;
+    private String repairMaterialPrettyName;
+    private final ItemType repairItemType;
+    private final MaterialType repairMaterialType;
     private final double xpMultiplier;
 
-    protected SimpleRepairable(Material type, Material repairMaterial, byte repairMetadata, int minimumLevel, int minimumQuantity, short maximumDurability, RepairItemType repairItemType, RepairMaterialType repairMaterialType, double xpMultiplier) {
+    protected SimpleRepairable(Material type, Material repairMaterial, byte repairMetadata, String repairMaterialPrettyName, int minimumLevel, int minimumQuantity, short maximumDurability, ItemType repairItemType, MaterialType repairMaterialType, double xpMultiplier) {
         this.itemMaterial = type;
         this.repairMaterial = repairMaterial;
         this.repairMetadata = repairMetadata;
+        this.repairMaterialPrettyName = repairMaterialPrettyName;
         this.repairItemType = repairItemType;
         this.repairMaterialType = repairMaterialType;
         this.minimumLevel = minimumLevel;
@@ -41,12 +46,17 @@ public class SimpleRepairable implements Repairable {
     }
 
     @Override
-    public RepairItemType getRepairItemType() {
+    public String getRepairMaterialPrettyName() {
+        return repairMaterialPrettyName;
+    }
+
+    @Override
+    public ItemType getRepairItemType() {
         return repairItemType;
     }
 
     @Override
-    public RepairMaterialType getRepairMaterialType() {
+    public MaterialType getRepairMaterialType() {
         return repairMaterialType;
     }
 

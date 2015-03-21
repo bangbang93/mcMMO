@@ -3,14 +3,18 @@ package com.gmail.nossr50.datatypes.player;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.DelayQueue;
 
 import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.config.Config;
 import com.gmail.nossr50.config.experience.ExperienceConfig;
 import com.gmail.nossr50.datatypes.MobHealthbarType;
 import com.gmail.nossr50.datatypes.experience.FormulaType;
+import com.gmail.nossr50.datatypes.experience.SkillXpGain;
 import com.gmail.nossr50.datatypes.skills.AbilityType;
 import com.gmail.nossr50.datatypes.skills.SkillType;
+import com.gmail.nossr50.runnables.player.PlayerProfileSaveTask;
 import com.gmail.nossr50.skills.child.FamilyTree;
 import com.gmail.nossr50.util.player.UserManager;
 
@@ -18,21 +22,34 @@ import com.google.common.collect.ImmutableMap;
 
 public class PlayerProfile {
     private final String playerName;
+    private UUID uuid;
     private boolean loaded;
-    private boolean changed;
+    private volatile boolean changed;
 
     /* HUDs */
     private MobHealthbarType mobHealthbarType;
+    private int scoreboardTipsShown;
 
     /* Skill Data */
     private final Map<SkillType, Integer>   skills     = new HashMap<SkillType, Integer>();   // Skill & Level
     private final Map<SkillType, Float>     skillsXp   = new HashMap<SkillType, Float>();     // Skill & XP
     private final Map<AbilityType, Integer> abilityDATS = new HashMap<AbilityType, Integer>(); // Ability & Cooldown
 
+    // Store previous XP gains for deminished returns
+    private DelayQueue<SkillXpGain> gainedSkillsXp = new DelayQueue<SkillXpGain>();
+    private HashMap<SkillType, Float> rollingSkillsXp = new HashMap<SkillType, Float>();
+
+    @Deprecated
     public PlayerProfile(String playerName) {
+        this(playerName, null);
+    }
+
+    public PlayerProfile(String playerName, UUID uuid) {
+        this.uuid = uuid;
         this.playerName = playerName;
 
         mobHealthbarType = Config.getInstance().getMobHealthbarDefault();
+        scoreboardTipsShown = 0;
 
         for (AbilityType abilityType : AbilityType.values()) {
             abilityDATS.put(abilityType, 0);
@@ -44,14 +61,22 @@ public class PlayerProfile {
         }
     }
 
+    @Deprecated
     public PlayerProfile(String playerName, boolean isLoaded) {
         this(playerName);
         this.loaded = isLoaded;
     }
 
-    public PlayerProfile(String playerName, Map<SkillType, Integer> levelData, Map<SkillType, Float> xpData, Map<AbilityType, Integer> cooldownData, MobHealthbarType mobHealthbarType) {
+    public PlayerProfile(String playerName, UUID uuid, boolean isLoaded) {
+        this(playerName, uuid);
+        this.loaded = isLoaded;
+    }
+
+    public PlayerProfile(String playerName, UUID uuid, Map<SkillType, Integer> levelData, Map<SkillType, Float> xpData, Map<AbilityType, Integer> cooldownData, MobHealthbarType mobHealthbarType, int scoreboardTipsShown) {
         this.playerName = playerName;
+        this.uuid = uuid;
         this.mobHealthbarType = mobHealthbarType;
+        this.scoreboardTipsShown = scoreboardTipsShown;
 
         skills.putAll(levelData);
         skillsXp.putAll(xpData);
@@ -60,20 +85,36 @@ public class PlayerProfile {
         loaded = true;
     }
 
+    public void scheduleAsyncSave() {
+        new PlayerProfileSaveTask(this).runTaskAsynchronously(mcMMO.p);
+    }
+
     public void save() {
         if (!changed || !loaded) {
             return;
         }
 
-        changed = !mcMMO.getDatabaseManager().saveUser(new PlayerProfile(playerName, ImmutableMap.copyOf(skills), ImmutableMap.copyOf(skillsXp), ImmutableMap.copyOf(abilityDATS), mobHealthbarType));
+        // TODO should this part be synchronized?
+        PlayerProfile profileCopy = new PlayerProfile(playerName, uuid, ImmutableMap.copyOf(skills), ImmutableMap.copyOf(skillsXp), ImmutableMap.copyOf(abilityDATS), mobHealthbarType, scoreboardTipsShown);
+        changed = !mcMMO.getDatabaseManager().saveUser(profileCopy);
 
         if (changed) {
-            mcMMO.p.getLogger().warning("PlayerProfile for " + playerName + " failed to save");
+            mcMMO.p.getLogger().warning("PlayerProfile saving failed for player: " + playerName + " " + uuid);
         }
     }
 
     public String getPlayerName() {
         return playerName;
+    }
+
+    public UUID getUniqueId() {
+        return uuid;
+    }
+
+    public void setUniqueId(UUID uuid) {
+        changed = true;
+
+        this.uuid = uuid;
     }
 
     public boolean isLoaded() {
@@ -89,7 +130,23 @@ public class PlayerProfile {
     }
 
     public void setMobHealthbarType(MobHealthbarType mobHealthbarType) {
+        changed = true;
+
         this.mobHealthbarType = mobHealthbarType;
+    }
+
+    public int getScoreboardTipsShown() {
+        return scoreboardTipsShown;
+    }
+
+    public void setScoreboardTipsShown(int scoreboardTipsShown) {
+        changed = true;
+
+        this.scoreboardTipsShown = scoreboardTipsShown;
+    }
+
+    public void increaseTipsShown() {
+        setScoreboardTipsShown(getScoreboardTipsShown() + 1);
     }
 
     /*
@@ -182,6 +239,16 @@ public class PlayerProfile {
         skillsXp.put(skill, skillsXp.get(skill) - xp);
     }
 
+    public void removeXp(SkillType skill, float xp) {
+        if (skill.isChildSkill()) {
+            return;
+        }
+
+        changed = true;
+
+        skillsXp.put(skill, skillsXp.get(skill) - xp);
+    }
+
     /**
      * Modify a skill level.
      *
@@ -232,7 +299,46 @@ public class PlayerProfile {
     }
 
     /**
-     * Get the total amount of Xp before the next level.
+     * Get the registered amount of experience gained
+     * This is used for diminished XP returns
+     *
+     * @return xp Experience amount registered
+     */
+    public float getRegisteredXpGain(SkillType skillType) {
+        float xp = 0F;
+
+        if (rollingSkillsXp.get(skillType) != null) {
+            xp = rollingSkillsXp.get(skillType);
+        }
+
+        return xp;
+    }
+
+    /**
+     * Register an experience gain
+     * This is used for diminished XP returns
+     *
+     * @param skillType Skill being used
+     * @param xp Experience amount to add
+     */
+    public void registerXpGain(SkillType skillType, float xp) {
+        gainedSkillsXp.add(new SkillXpGain(skillType, xp));
+        rollingSkillsXp.put(skillType, getRegisteredXpGain(skillType) + xp);
+    }
+
+    /**
+     * Remove experience gains older than a given time
+     * This is used for diminished XP returns
+     */
+    public void purgeExpiredXpGains() {
+        SkillXpGain gain;
+        while ((gain = gainedSkillsXp.poll()) != null) {
+            rollingSkillsXp.put(gain.getSkill(), getRegisteredXpGain(gain.getSkill()) - gain.getXp());
+        }
+    }
+
+    /**
+     * Get the amount of Xp remaining before the next level.
      *
      * @param skillType Type of skill to check
      * @return the total amount of Xp until next level

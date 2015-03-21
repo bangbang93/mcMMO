@@ -12,7 +12,10 @@ import org.bukkit.material.Crops;
 import org.bukkit.material.NetherWarts;
 import org.bukkit.material.SmoothBrick;
 
+import com.gmail.nossr50.mcMMO;
 import com.gmail.nossr50.skills.repair.Repair;
+import com.gmail.nossr50.skills.salvage.Salvage;
+import com.gmail.nossr50.util.temp.DualSupport;
 
 public final class BlockUtils {
     private BlockUtils() {}
@@ -61,10 +64,11 @@ public final class BlockUtils {
             case DROPPER:
             case HOPPER:
             case TRAPPED_CHEST:
+            case IRON_DOOR:
                 return false;
 
             default:
-                return !isMcMMOAnvil(blockState) && !ModUtils.isCustomAbilityBlock(blockState);
+                return DualSupport.canActivateAbilities(blockState) && !isMcMMOAnvil(blockState) && !mcMMO.getModManager().isCustomAbilityBlock(blockState);
         }
     }
 
@@ -111,7 +115,9 @@ public final class BlockUtils {
         switch (blockState.getType()) {
             case BROWN_MUSHROOM:
             case CACTUS:
+            case DOUBLE_PLANT:
             case MELON_BLOCK:
+            case LONG_GRASS:
             case PUMPKIN:
             case RED_MUSHROOM:
             case RED_ROSE:
@@ -135,7 +141,7 @@ public final class BlockUtils {
                 return ((CocoaPlant) blockState.getData()).getSize() == CocoaPlantSize.LARGE;
 
             default:
-                return ModUtils.isCustomHerbalismBlock(blockState);
+                return mcMMO.getModManager().isCustomHerbalismBlock(blockState);
         }
     }
 
@@ -149,15 +155,18 @@ public final class BlockUtils {
         switch (blockState.getType()) {
             case ENDER_STONE:
             case GLOWSTONE:
+            case HARD_CLAY:
             case MOSSY_COBBLESTONE:
             case NETHERRACK:
             case OBSIDIAN:
+            case PACKED_ICE:
             case SANDSTONE:
+            case STAINED_CLAY:
             case STONE:
                 return true;
 
             default:
-                return isOre(blockState) || ModUtils.isCustomMiningBlock(blockState);
+                return DualSupport.affectedBySuperBreaker(blockState) || isOre(blockState) || mcMMO.getModManager().isCustomMiningBlock(blockState);
         }
     }
 
@@ -181,7 +190,7 @@ public final class BlockUtils {
                 return true;
 
             default:
-                return ModUtils.isCustomExcavationBlock(blockState);
+                return mcMMO.getModManager().isCustomExcavationBlock(blockState);
         }
     }
 
@@ -194,12 +203,13 @@ public final class BlockUtils {
     public static boolean isLog(BlockState blockState) {
         switch (blockState.getType()) {
             case LOG:
+            case LOG_2:
             case HUGE_MUSHROOM_1:
             case HUGE_MUSHROOM_2:
                 return true;
 
             default:
-                return ModUtils.isCustomLogBlock(blockState);
+                return mcMMO.getModManager().isCustomLog(blockState);
         }
     }
 
@@ -212,10 +222,11 @@ public final class BlockUtils {
     public static boolean isLeaves(BlockState blockState) {
         switch (blockState.getType()) {
             case LEAVES:
+            case LEAVES_2:
                 return true;
 
             default:
-                return ModUtils.isCustomLeafBlock(blockState);
+                return mcMMO.getModManager().isCustomLeaf(blockState);
         }
     }
 
@@ -274,7 +285,7 @@ public final class BlockUtils {
      * Determine if a given block can be made into Mycelium
      *
      * @param blockState The {@link BlockState} of the block to check
-     * @return true if the block can be made in Mycelium, false otherwise
+     * @return true if the block can be made into Mycelium, false otherwise
      */
     public static boolean canMakeShroomy(BlockState blockState) {
         switch (blockState.getType()) {
@@ -296,7 +307,13 @@ public final class BlockUtils {
     public static boolean isMcMMOAnvil(BlockState blockState) {
         Material type = blockState.getType();
 
-        return type == Repair.repairAnvilMaterial || type == Repair.salvageAnvilMaterial;
+        return type == Repair.anvilMaterial || type == Salvage.anvilMaterial;
+    }
+
+    public static boolean isPistonPiece(BlockState blockState) {
+        Material type = blockState.getType();
+
+        return type == Material.PISTON_MOVING_PIECE || type == Material.AIR;
     }
 
     /**
