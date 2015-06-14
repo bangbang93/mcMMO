@@ -8,7 +8,7 @@ Options:
     # Square root of the number of chunks to convert per tick.
     ConversionRate: 1
     # true to use enchantment buffs for Super Breaker & Giga Drill Breaker, false to use potion buffs
-    EnchantmentBuffs: true
+    EnchantmentBuffs: false
 
     # Amount of users to convert every interval
     UUIDConvertAmount: 100
